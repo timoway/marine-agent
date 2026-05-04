@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "marine-agent": {
+      "command": "/Users/timo-mbp/Documents/Github/marine-agent/venv/bin/python3",
+      "args": [
+        "/Users/timo-mbp/Documents/Github/marine-agent/marine_server.py"
+      ]
+    }
+  }
+}

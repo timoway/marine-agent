@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import Map, { Marker, NavigationControl } from 'react-map-gl/mapbox';
+import Map, { Marker, NavigationControl, Source, Layer } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { 
   Waves, Thermometer, Wind, Eye, Droplets, AlertTriangle, 
   Ship, Info, Calendar, Search, Map as MapIcon, Menu, X, 
   Navigation, Footprints, Anchor, Sun, ShieldCheck, MapPin, 
   MessageSquare, Send, Sparkles, Activity, Palette, Leaf, Moon, Star, CloudSun, Navigation2,
-  TrendingUp, TrendingDown, Flag
+  TrendingUp, TrendingDown, Flag, Radar
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -20,7 +20,7 @@ interface MarineData {
   lat: number;
   lon: number;
   timestamp: string;
-  tides: { predictions: any[]; water_temp: string; current_status: string; trend: string; source: string; };
+  tides: { predictions: any[]; water_temp: string; current_status: string; trend: string; next_event: string; source: string; };
   forecast: { summary: string; rip_current: string; source: string; };
   skywatch: { moon_phase: string; illumination: string; planets_visible: string; upcoming_event: string; };
   surf: { height: number; period: number; intensity: string; type: string; rip_current: string; };
@@ -32,7 +32,7 @@ interface MarineData {
     vibe: string; 
     reason: string; 
     color: string; 
-    activities: { paddling: string; swimming: string; beach_day: string; };
+    activities: { paddling: string; swimming: string; beach: string; };
   };
   teeth: { score: number; } | null;
   clarity: { label: string; feet: number; };
@@ -47,6 +47,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [viewMode, setViewMode] = useState<'dashboard' | 'map'>('dashboard');
+  const [showRadar, setShowRadar] = useState(false);
 
   useEffect(() => {
     fetch(`${API_BASE}/beaches_with_flags`).then(res => res.json()).then(setBeaches).catch(err => console.error(err));
@@ -134,7 +135,17 @@ function App() {
             <button onClick={() => window.location.reload()} className="toggle-btn active" style={{ marginTop: '20px' }}>Retry</button>
           </div>
         ) : viewMode === 'map' ? (
-          <div className="map-container-fixed">
+          <div className="map-container-fixed" style={{ position: 'relative' }}>
+             {/* Radar Toggle Overlay */}
+             <button 
+               className={`radar-toggle ${showRadar ? 'active' : ''}`}
+               onClick={() => setShowRadar(!showRadar)}
+               title="Toggle NWS Weather Radar"
+             >
+               <Radar size={20} />
+               <span>RADAR</span>
+             </button>
+
              <Map
                initialViewState={{ latitude: 26.8, longitude: -82.35, zoom: 8.5 }}
                style={{ width: '100%', height: '100%' }}
@@ -142,6 +153,22 @@ function App() {
                mapboxAccessToken={MAPBOX_TOKEN}
              >
                <NavigationControl position="top-right" />
+               
+               {showRadar && (
+                 <Source
+                   id="nws-radar"
+                   type="raster"
+                   tiles={['https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png']}
+                   tileSize={256}
+                 >
+                   <Layer
+                     id="radar-layer"
+                     type="raster"
+                     paint={{ 'raster-opacity': 0.6 }}
+                   />
+                 </Source>
+               )}
+
                {beaches.map(beach => (
                  <Marker key={beach.id} latitude={beach.lat} longitude={beach.lon} anchor="bottom" onClick={e => { e.originalEvent.stopPropagation(); setSelectedBeach(beach.id); setViewMode('dashboard'); }}>
                     <div className="map-marker-pulse">
@@ -172,7 +199,7 @@ function App() {
                     <span className="meta-item"><Navigation2 size={16} /> Wind: {data.weather?.wind_mph ?? '--'} mph {data.weather?.wind_dir ?? ''}</span>
                     <span className="divider">|</span>
                     <span className="meta-item" style={{ color: '#f8fafc', fontWeight: 700 }}>
-                      <Activity size={16} /> {data.tides?.current_status ?? '--'} ({data.tides?.trend ?? '--'})
+                      <Activity size={16} /> {data.tides?.next_event ?? '--'}
                       {data.tides?.trend === 'Rising' ? <TrendingUp size={14} style={{ marginLeft: '4px' }} /> : <TrendingDown size={14} style={{ marginLeft: '4px' }} />}
                     </span>
                   </div>
@@ -235,7 +262,7 @@ function App() {
                    </div>
                    <div className="activity-item">
                       <Leaf size={16} color="#10b981" />
-                      <div style={{ fontSize: '0.9rem' }}>{data.mote_extras?.algae ?? '--'} ({data.mote_extras?.algae_type ?? '--'})</div>
+                      <div style={{ fontSize: '0.9rem' }}><strong>Algae:</strong> {data.mote_extras?.algae ?? '--'} ({data.mote_extras?.algae_type ?? '--'})</div>
                    </div>
                 </div>
               </div>

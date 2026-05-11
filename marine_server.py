@@ -19,7 +19,6 @@ OPENUV_KEY = os.environ.get("OPENUV_KEY", "")
 AGENT_API_KEY = os.environ.get("AGENT_API_KEY", "marine-secret-123")
 
 # --- CACHING & PERFORMANCE ---
-# Single source of truth for the map and dashboard
 GLOBAL_DATA_STORE = {}
 
 # --- MCP SERVER ---
@@ -30,7 +29,7 @@ NOAA_STATIONS = {
     "8725889": {"name": "Venice (Roberts Bay)", "lat": 27.1000, "lon": -82.4433},
     "8726084": {"name": "Sarasota (Big Sarasota Pass area)", "lat": 27.3300, "lon": -82.5583},
     "8725577": {"name": "Port Boca Grande", "lat": 26.7267, "lon": -82.2583},
-    "8725325": {"name": "Carlos Point (Fort Myers Beach area)", "lat": 26.3983, "lon": -81.8767},
+    "8725325": {"name": "Carlos Point (Fort Myers area)", "lat": 26.3983, "lon": -81.8767},
     "8725110": {"name": "Naples (Gulf of Mexico)", "lat": 26.1317, "lon": -81.8117},
     "8724967": {"name": "Marco Island (Caxambas Pass)", "lat": 25.9183, "lon": -81.7283},
     "8726724": {"name": "Clearwater Beach", "lat": 27.9783, "lon": -82.8317},
@@ -98,6 +97,13 @@ def calculate_flag(wave_ft, wind_mph, red_tide_status, jellyfish_detected):
     if wave_ft > 1.5 or wind_mph > 12:
         return {"label": "YELLOW FLAG", "vibe": "Medium Hazard", "color": "#facc15"}
     return {"label": "GREEN FLAG", "vibe": "Low Hazard", "color": "#4ade80"}
+
+def get_beach_key(beach_name: str) -> Optional[str]:
+    if not beach_name: return "venice"
+    beach_name = beach_name.lower().replace(" ", "-")
+    for key in BEACH_CONFIG:
+        if key in beach_name: return key
+    return None
 
 # --- FETCHERS ---
 
@@ -185,6 +191,14 @@ def _get_tide_data(config):
         future = [p for p in preds if p['t'] >= now_str]
         if not future: future = preds[:3]
         
+        # New: Actionable Tide String
+        next_tide = future[0]
+        next_type = "High" if next_tide['type'] == 'H' else "Low"
+        # Parse 2026-05-04 11:22 to 11:22 PM format
+        time_obj = datetime.datetime.strptime(next_tide['t'], "%Y-%m-%d %H:%M")
+        next_time_str = time_obj.strftime("%-I:%M %p")
+        next_event_string = f"Next {next_type} Tide {next_time_str}"
+
         temp_url = f"https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station={config['tide_id']}&product=water_temperature&datum=MLLW&time_zone=lst_ldt&units=english&format=json"
         water_temp = "72.4"
         try: water_temp = requests.get(temp_url, timeout=3).json().get('data', [{}])[0].get('v', "72.4")
@@ -192,8 +206,15 @@ def _get_tide_data(config):
         
         station_info = NOAA_STATIONS.get(config['tide_id'], {"lat": config['lat'], "lon": config['lon']})
         dist = calculate_relative_position(station_info["lat"], station_info["lon"], config["lat"], config["lon"])
-        return {"predictions": future[:3], "water_temp": water_temp, "current_status": f"{'High' if future[0]['type'] == 'H' else 'Low'} Tide", "trend": "Rising" if future[0]['type'] == 'H' else "Falling", "source": f"NOAA {config['tide_id']} ({dist})"}
-    except: return {"predictions": [], "water_temp": "--", "current_status": "N/A", "trend": "N/A", "source": "N/A"}
+        return {
+            "predictions": future[:3], 
+            "water_temp": water_temp, 
+            "current_status": f"{'High' if future[0]['type'] == 'L' else 'Low'} Tide", # If next is High, current is Low-ish
+            "trend": "Rising" if future[0]['type'] == 'H' else "Falling", 
+            "next_event": next_event_string,
+            "source": f"NOAA {config['tide_id']} ({dist})"
+        }
+    except: return {"predictions": [], "water_temp": "--", "current_status": "N/A", "trend": "N/A", "next_event": "Tides Unavailable", "source": "N/A"}
 
 def _get_skywatch():
     try:
@@ -244,11 +265,10 @@ def refresh_one_beach(beach_id: str) -> dict:
         
         flag = calculate_flag(wave_ft, wind_mph, red_tide, mote["jellyfish"].lower() != "none")
         
-        # --- UNIFIED ACTIVITY LOGIC (Current + Near-term) ---
+        # --- UNIFIED ACTIVITY LOGIC ---
         summary_now = forecast["summary"].lower()
         is_stormy_now = "thunderstorms" in summary_now or "showers" in summary_now
         
-        # "Beach" logic (Current + Immediate Daytime Forecast)
         day_forecast = ""
         for p in forecast.get("periods", [])[:2]:
             if "night" not in p["name"].lower():
@@ -314,9 +334,7 @@ async def list_beaches():
 
 @app.get("/api/conditions/{beach_id}")
 async def get_beach_conditions(beach_id: str):
-    # Try to serve from global store first for instant load
     if beach_id in GLOBAL_DATA_STORE: return GLOBAL_DATA_STORE[beach_id]
-    # Fallback to fresh fetch if not in store (e.g. just started)
     return refresh_one_beach(beach_id)
 
 if __name__ == "__main__":

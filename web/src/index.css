@@ -172,6 +172,40 @@ body {
   overflow: hidden;
   border: 1px solid #334155;
   min-height: calc(100vh - 80px);
+  position: relative;
+}
+
+.radar-toggle {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: 10;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 10px 16px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.radar-toggle:hover {
+  background: rgba(30, 41, 59, 0.9);
+  color: white;
+}
+
+.radar-toggle.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
 }
 
 /* GLASS FLAG (HEADER) */

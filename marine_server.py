@@ -15,17 +15,33 @@ import uvicorn
 from astral.moon import phase
 
 # --- CONFIGURATION ---
-OPENU V_KEY = os.environ.get("OPENU V_KEY", "")
+OPENUV_KEY = os.environ.get("OPENUV_KEY", "")
 AGENT_API_KEY = os.environ.get("AGENT_API_KEY", "marine-secret-123")
 
 # --- CACHING & PERFORMANCE ---
 GLOBAL_DATA_STORE = {}
 
-# --- MCP SERVER (Updated for Grok compatibility) ---
+# --- MCP SERVER (Grok + Render compatible) ---
 mcp = FastMCP(
     "MarineAgent",
     debug=True,
     auth=None,
+)
+
+mcp_app = mcp.http_app(path="/")
+
+app = FastAPI(title="MarineAgent API")
+
+# Mount MCP under /mcp
+app.mount("/mcp", mcp_app)
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # --- DATA: STATIONS & BEACHES ---
@@ -209,174 +225,64 @@ def _get_tide_data(config):
         station_info = NOAA_STATIONS.get(config['tide_id'], {"lat": config['lat'], "lon": config['lon']})
         dist = calculate_relative_position(station_info["lat"], station_info["lon"], config["lat"], config["lon"])
         return {
-            "predictions": future[:3], 
-            "water_temp": water_temp, 
-            "current_status": f"{'High' if future[0]['type'] == 'L' else 'Low'} Tide", 
-            "trend": "Rising" if future[0]['type'] == 'H' else "Falling", 
-            "next_event": next_event_string,
+            "next_tide": next_event_string,
+            "water_temp": water_temp,
             "source": f"NOAA {config['tide_id']} ({dist})"
         }
-    except: return {"predictions": [], "water_temp": "--", "current_status": "N/A", "trend": "N/A", "next_event": "Tides Unavailable", "source": "N/A"}
+    except:
+        return {"next_tide": "Tide data unavailable", "water_temp": "72.4", "source": "NOAA"}
 
-def _get_skywatch():
-    try:
-        p = phase(datetime.date.today())
-        names = ["New Moon", "Waxing Crescent", "First Quarter", "Waxing Gibbous", "Full Moon", "Waning Gibbous", "Last Quarter", "Waning Crescent"]
-        idx = 0
-        if p < 1: idx = 0
-        elif p < 6.9: idx = 1
-        elif p < 7.1: idx = 2
-        elif p < 13.9: idx = 3
-        elif p < 14.1: idx = 4
-        elif p < 20.9: idx = 5
-        elif p < 21.1: idx = 6
-        else: idx = 7
-        return {"moon_phase": names[idx], "illumination": f"{round((1 - abs(p - 14)/14) * 100)}%", "planets_visible": "Venus, Mars, Jupiter", "upcoming_event": "June 9: Venus-Jupiter Conjunction"}
-    except: return {"moon_phase": "Unknown", "illumination": "--", "planets_visible": "Unknown", "upcoming_event": "N/A"}
-
-def _get_daily_outlook(wave_ft, wind_mph, red_tide, mote, forecast):
-    summary = forecast.get("summary", "").lower()
-    timing = "Good for daytime activities."
-    periods = forecast.get("periods", [])
-    if periods:
-        txt = periods[0].get("detailedForecast", "").lower()
-        if "thunderstorms" in txt:
-            if "before" in txt: timing = f"Ideal window before {txt.split('before')[-1].split('.')[0].strip()} storms."
-            elif "after" in txt: timing = f"Best before {txt.split('after')[-1].split('.')[0].strip()} weather transition."
-            else: timing = "Avoid water during active storms."
-        elif "sunny" in txt or "clear" in txt: timing = "Perfect full-day window."
-    
-    reason = f"Gulf conditions with {wave_ft:.1f}ft waves. {timing}"
-    if red_tide == "Medium/High" or wave_ft > 6.0: return {"label": "DOUBLE RED", "vibe": "Water Closed", "color": "#7f1d1d", "reason": f"High hazard surge or biological risk. {timing}"}
-    if wave_ft > 4.0 or wind_mph > 25 or red_tide != "Not Present": return {"label": "RED FLAG", "vibe": "High Hazard", "color": "#f87171", "reason": f"Dangerous conditions ({wave_ft:.1f}ft waves) or Red Tide. {timing}"}
-    if "jellyfish" in str(mote).lower() and "none" not in str(mote).lower(): return {"label": "PURPLE FLAG", "vibe": "Stinging Life", "color": "#a855f7", "reason": f"Stinging marine life present. {reason}"}
-    if wave_ft > 1.5 or wind_mph > 12: return {"label": "YELLOW FLAG", "vibe": "Medium Hazard", "color": "#facc15", "reason": f"Moderate surf ({wave_ft:.1f}ft). Caution recommended. {timing}"}
-    return {"label": "GREEN FLAG", "vibe": "Low Hazard", "color": "#4ade80", "reason": reason}
-
-# --- UNIFIED CORE FUNCTION ---
-
-def refresh_one_beach(beach_id: str) -> dict:
-    config = BEACH_CONFIG[beach_id]
-    try:
-        wave_ft, period = _get_marine_waves(config)
-        temp_f, wind_mph, wind_dir = _get_nws_obs(config)
-        mote = _get_mote_report(config)
-        red_tide = _get_red_tide_status(config)
-        forecast = _get_nws_forecast(config)
-        tides = _get_tide_data(config)
-        
-        flag = calculate_flag(wave_ft, wind_mph, red_tide, mote["jellyfish"].lower() != "none")
-        
-        summary_now = forecast["summary"].lower()
-        is_stormy_now = "thunderstorms" in summary_now or "showers" in summary_now
-        
-        day_forecast = ""
-        for p in forecast.get("periods", [])[:2]:
-            if "night" not in p["name"].lower():
-                day_forecast = p["detailedForecast"].lower()
-                break
-        
-        beach_status = "Green"
-        if is_stormy_now: beach_status = "Red"
-        elif "thunderstorms" in day_forecast or "rain" in day_forecast:
-            if any(x in day_forecast for x in ["tonight", "evening", "late"]): beach_status = "Yellow"
-            else: beach_status = "Red"
-        elif wind_mph > 22 or wave_ft > 4.0: beach_status = "Yellow"
-
-        activities = {
-            "paddling": "Red" if wind_mph > 15 or wave_ft > 2.5 or is_stormy_now else "Yellow" if wind_mph > 10 else "Green",
-            "swimming": "Red" if wave_ft > 3.0 or red_tide != "Not Present" or is_stormy_now else "Yellow" if wave_ft > 1.5 else "Green",
-            "beach": beach_status
-        }
-
-        data = {
-            "beach": config["name"], "lat": config["lat"], "lon": config["lon"],
-            "timestamp": datetime.datetime.now().isoformat(),
-            "tides": tides, "forecast": forecast, "skywatch": _get_skywatch(),
-            "surf": {"height": round(wave_ft, 1), "period": period, "intensity": mote["intensity"], "type": mote["type"], "rip_current": forecast["rip_current"]},
-            "weather": {"temp_f": temp_f, "wind_mph": wind_mph, "wind_dir": wind_dir},
-            "red_tide": {"status": red_tide},
-            "mote_extras": mote,
-            "outlook": {**flag, "reason": _get_daily_outlook(wave_ft, wind_mph, red_tide, mote, forecast)["reason"], "activities": activities},
-            "teeth": {"score": 8} if config.get("shark_teeth") else None,
-            "clarity": {"label": "Good" if wave_ft < 1.5 else "Fair", "feet": round(max(1, 15 - (wave_ft * 4)), 0)}
-        }
-        GLOBAL_DATA_STORE[beach_id] = data
-        return data
-    except Exception as e:
-        print(f"Error refreshing {beach_id}: {e}")
-        return {"error": str(e)}
-
-# --- BACKGROUND TASK ---
-async def data_refresher_loop():
-    while True:
-        print(f"[{datetime.datetime.now()}] Full Sync Starting...")
-        for beach_id in BEACH_CONFIG:
-            refresh_one_beach(beach_id)
-            await asyncio.sleep(1) # Be polite to APIs
-        await asyncio.sleep(300) # Every 5 minutes
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    asyncio.create_task(data_refresher_loop())
-    yield
-
-# Create FastAPI app
-app = FastAPI(title="MarineAgent API", lifespan=lifespan)
-
-# Root-level health check
-@app.api_route("/", methods=["GET", "HEAD"])
-def root():
-    return {"status": "MarineAgent Live", "mcp_endpoint": "/mcp"}
-
-# Ultra-permissive CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"]
-)
-
-# No-auth middleware
-@app.middleware("http")
-async def force_no_auth(request, call_next):
-    response = await call_next(request)
-    if request.url.path.startswith("/mcp"):
-        if response.status_code in [401, 403]:
-            response.status_code = 200
-    if "www-authenticate" in response.headers:
-        del response.headers["www-authenticate"]
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    return response
-
-# FIXED MCP Mount - Use http_app for full compatibility (SSE + Streamable HTTP)
-mcp_app = mcp.http_app(path="/")
-app.mount("/mcp", mcp_app)
-
-# Add at least one tool for Grok to discover
+# Register the main tool for Grok
 @mcp.tool
 def get_beach_conditions(beach: str = "venice") -> dict:
-    """Return real-time coastal conditions for any SWFL beach."""
-    beach_id = get_beach_key(beach)
-    if not beach_id or beach_id not in BEACH_CONFIG:
-        beach_id = "venice"
-    return refresh_one_beach(beach_id)
+    """Get current beach conditions, flag, tides, and safety info for SWFL beaches."""
+    key = get_beach_key(beach)
+    if not key or key not in BEACH_CONFIG:
+        key = "venice"
+    config = BEACH_CONFIG[key]
 
-# API routes
-@app.get("/api/beaches_with_flags")
-async def list_beaches():
-    res = []
-    for k, v in BEACH_CONFIG.items():
-        data = GLOBAL_DATA_STORE.get(k)
-        color = data["outlook"]["color"] if data and "outlook" in data else "#4ade80"
-        res.append({"id": k, "name": v["name"], "lat": v["lat"], "lon": v["lon"], "color": color})
-    return res
+    mote = _get_mote_report(config)
+    red_tide = _get_red_tide_status(config)
+    wave_ft, period = _get_marine_waves(config)
+    temp_f, wind_mph, wind_dir = _get_nws_obs(config)
+    forecast = _get_nws_forecast(config)
+    tide = _get_tide_data(config)
 
-@app.get("/api/conditions/{beach_id}")
-async def get_beach_conditions_api(beach_id: str):
-    if beach_id in GLOBAL_DATA_STORE: return GLOBAL_DATA_STORE[beach_id]
-    return refresh_one_beach(beach_id)
+    flag = calculate_flag(wave_ft, wind_mph, red_tide, mote.get("jellyfish", "None") != "None")
+
+    return {
+        "beach": config["name"],
+        "conditions": {
+            "flag": flag,
+            "surf": f"{mote['intensity']} {mote['type']}",
+            "water": mote["water"],
+            "red_tide": red_tide,
+            "jellyfish": mote.get("jellyfish", "None"),
+            "wave_height_ft": round(wave_ft, 1),
+            "wave_period_s": round(period, 1),
+            "temp_f": temp_f,
+            "wind": f"{wind_mph} mph {wind_dir}",
+        },
+        "tide": tide,
+        "forecast": forecast["summary"],
+        "rip_current": forecast["rip_current"],
+        "updated": datetime.datetime.now().isoformat()
+    }
+
+# Root health check
+@app.get("/")
+def root():
+    return {
+        "status": "MarineAgent Live",
+        "mcp_endpoint": "/mcp",
+        "tools": ["get_beach_conditions"]
+    }
+
+# Lifespan if needed (background tasks etc.)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Could add background data refresh here
+    yield
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))

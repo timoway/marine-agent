@@ -234,7 +234,7 @@ def _get_tide_data(config):
         return {"next_tide": "Tide data unavailable", "water_temp": "72.4", "source": "NOAA"}
 
 # Register the main tool for Grok
-@mcp.tool
+@mcp.tool()
 def get_beach_conditions(beach: str = "venice") -> dict:
     """Get current beach conditions, flag, tides, and safety info for SWFL beaches."""
     key = get_beach_key(beach)

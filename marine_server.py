@@ -22,6 +22,7 @@ AGENT_API_KEY = os.environ.get("AGENT_API_KEY", "marine-secret-123")
 GLOBAL_DATA_STORE = {}
 
 # --- MCP SERVER ---
+# Initialize with absolute zero authentication for Grok compatibility
 mcp = FastMCP("MarineAgent")
 
 # --- DATA: STATIONS & BEACHES ---
@@ -321,14 +322,23 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="MarineAgent API", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- MCP SSE MOUNT ---
-app.mount("/mcp", mcp.sse_app())
+# Ultra-permissive CORS for AI agents
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"]
+)
 
+# Root-level status for health checks
 @app.get("/")
 async def root():
-    return {"status": "MarineAgent Live", "mcp_endpoint": "/mcp/sse"}
+    return {"status": "MarineAgent Live", "mcp_endpoint": "/sse/sse"}
+
+# Direct SSE mount for Grok
+app.mount("/sse", mcp.sse_app())
 
 @app.get("/api/beaches_with_flags")
 async def list_beaches():

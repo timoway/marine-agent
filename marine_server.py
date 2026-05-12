@@ -323,6 +323,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="MarineAgent API", lifespan=lifespan)
 
+# Root-level health check (Supports GET and HEAD for Render)
+@app.api_route("/", methods=["GET", "HEAD"])
+async def root():
+    return {"status": "MarineAgent Live", "mcp_endpoint": "/sse/sse"}
+
 # Ultra-permissive CORS for AI agents
 app.add_middleware(
     CORSMiddleware,
@@ -332,10 +337,13 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# Root-level status for health checks
-@app.get("/")
-async def root():
-    return {"status": "MarineAgent Live", "mcp_endpoint": "/sse/sse"}
+# Force-disable any potential basic auth headers from dependencies
+@app.middleware("http")
+async def strip_auth_headers(request, call_next):
+    response = await call_next(request)
+    if "www-authenticate" in response.headers:
+        del response.headers["www-authenticate"]
+    return response
 
 # Direct SSE mount for Grok
 app.mount("/sse", mcp.sse_app())

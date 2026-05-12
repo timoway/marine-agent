@@ -11,7 +11,7 @@ import {
 
 // --- CONFIGURATION ---
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
-const API_BASE = `http://${window.location.hostname}:8000/api`;
+const API_BASE = import.meta.env.VITE_API_BASE || `http://${window.location.hostname}:8000/api`;
 
 interface Beach { id: string; name: string; lat: number; lon: number; color?: string; }
 

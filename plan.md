@@ -23,13 +23,13 @@ Add conversational functionality so users can chat with the Marine Agent (e.g., 
 ### Phase 3: Enhanced Options
 - Add chat sidebar to React dashboard
 - Telegram/SMS bot for texting
-- Full Grok or Gemini integration via API
+- [IN PROGRESS] Grok or Gemini integration via Remote MCP
 
 ### Detailed Options
 1. **Streamlit Chat** (recommended start)
 2. **Extend React Dashboard**
 3. **Telegram Bot**
-4. **Grok Remote MCP**
+4. **Grok Remote MCP** (Endpoint enabled at `/mcp/sse`)
 
 ## Next Steps
 - Create Streamlit chat prototype

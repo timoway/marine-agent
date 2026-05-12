@@ -15,7 +15,7 @@ import uvicorn
 from astral.moon import phase
 
 # --- CONFIGURATION ---
-OPENU V_KEY = os.environ.get("OPENU V_KEY", "")   # ← This line is STILL broken (space in variable name)
+OPENUV_KEY = os.environ.get("OPENUV_KEY", "")
 AGENT_API_KEY = os.environ.get("AGENT_API_KEY", "marine-secret-123")
 
 # --- CACHING & PERFORMANCE ---

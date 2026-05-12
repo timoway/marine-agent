@@ -324,9 +324,11 @@ app = FastAPI(title="MarineAgent API", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # --- MCP SSE MOUNT ---
-# This enables remote MCP clients (like Grok) to connect via SSE
-# We use /sse at the root level for better compatibility
-app.mount("/sse", mcp.sse_app())
+app.mount("/mcp", mcp.sse_app())
+
+@app.get("/")
+async def root():
+    return {"status": "MarineAgent Live", "mcp_endpoint": "/mcp/sse"}
 
 @app.get("/api/beaches_with_flags")
 async def list_beaches():

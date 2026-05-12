@@ -15,24 +15,20 @@ import uvicorn
 from astral.moon import phase
 
 # --- CONFIGURATION ---
-OPENUV_KEY = os.environ.get("OPENUV_KEY", "")
+OPENU V_KEY = os.environ.get("OPENU V_KEY", "")
 AGENT_API_KEY = os.environ.get("AGENT_API_KEY", "marine-secret-123")
 
 # --- CACHING & PERFORMANCE ---
 GLOBAL_DATA_STORE = {}
 
-# --- MCP SERVER ---
-# Force debug mode and zero authentication to allow any remote client (Grok)
+# --- MCP SERVER (Updated for Grok compatibility) ---
 mcp = FastMCP(
     "MarineAgent",
     debug=True,
     auth=None,
-    sse_path="/"  # Mount internal path to root
 )
 
 # --- DATA: STATIONS & BEACHES ---
-# ... (rest of the code stays same)
-
 NOAA_STATIONS = {
     "8725889": {"name": "Venice (Roberts Bay)", "lat": 27.1000, "lon": -82.4433},
     "8726084": {"name": "Sarasota (Big Sarasota Pass area)", "lat": 27.3300, "lon": -82.5583},
@@ -199,10 +195,8 @@ def _get_tide_data(config):
         future = [p for p in preds if p['t'] >= now_str]
         if not future: future = preds[:3]
         
-        # New: Actionable Tide String
         next_tide = future[0]
         next_type = "High" if next_tide['type'] == 'H' else "Low"
-        # Parse 2026-05-04 11:22 to 11:22 PM format
         time_obj = datetime.datetime.strptime(next_tide['t'], "%Y-%m-%d %H:%M")
         next_time_str = time_obj.strftime("%-I:%M %p")
         next_event_string = f"Next {next_type} Tide {next_time_str}"
@@ -217,7 +211,7 @@ def _get_tide_data(config):
         return {
             "predictions": future[:3], 
             "water_temp": water_temp, 
-            "current_status": f"{'High' if future[0]['type'] == 'L' else 'Low'} Tide", # If next is High, current is Low-ish
+            "current_status": f"{'High' if future[0]['type'] == 'L' else 'Low'} Tide", 
             "trend": "Rising" if future[0]['type'] == 'H' else "Falling", 
             "next_event": next_event_string,
             "source": f"NOAA {config['tide_id']} ({dist})"
@@ -273,7 +267,6 @@ def refresh_one_beach(beach_id: str) -> dict:
         
         flag = calculate_flag(wave_ft, wind_mph, red_tide, mote["jellyfish"].lower() != "none")
         
-        # --- UNIFIED ACTIVITY LOGIC ---
         summary_now = forecast["summary"].lower()
         is_stormy_now = "thunderstorms" in summary_now or "showers" in summary_now
         
@@ -328,14 +321,15 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(data_refresher_loop())
     yield
 
+# Create FastAPI app
 app = FastAPI(title="MarineAgent API", lifespan=lifespan)
 
-# Root-level health check (Supports GET and HEAD for Render)
+# Root-level health check
 @app.api_route("/", methods=["GET", "HEAD"])
-async def root():
-    return {"status": "MarineAgent Live", "mcp_endpoint": "/sse/sse"}
+def root():
+    return {"status": "MarineAgent Live", "mcp_endpoint": "/mcp"}
 
-# Ultra-permissive CORS for AI agents
+# Ultra-permissive CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -344,27 +338,32 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# Force-disable any potential basic auth headers and ensure 200 OK for agents
+# No-auth middleware
 @app.middleware("http")
 async def force_no_auth(request, call_next):
     response = await call_next(request)
-    
-    # If anything on the MCP path tries to demand auth, kill it
     if request.url.path.startswith("/mcp"):
         if response.status_code in [401, 403]:
-            # Downgrade errors to 200 OK to bypass Grok security interstitials
             response.status_code = 200
-        
     if "www-authenticate" in response.headers:
         del response.headers["www-authenticate"]
-    
-    # Add explicit 'No-Cache' for the agent
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return response
 
-# Standard mount point for Grok
-app.mount("/mcp", mcp.sse_app())
+# FIXED MCP Mount - Use http_app for full compatibility (SSE + Streamable HTTP)
+mcp_app = mcp.http_app(path="/")
+app.mount("/mcp", mcp_app)
 
+# Add at least one tool for Grok to discover
+@mcp.tool
+def get_beach_conditions(beach: str = "venice") -> dict:
+    """Return real-time coastal conditions for any SWFL beach."""
+    beach_id = get_beach_key(beach)
+    if not beach_id or beach_id not in BEACH_CONFIG:
+        beach_id = "venice"
+    return refresh_one_beach(beach_id)
+
+# API routes
 @app.get("/api/beaches_with_flags")
 async def list_beaches():
     res = []
@@ -375,7 +374,7 @@ async def list_beaches():
     return res
 
 @app.get("/api/conditions/{beach_id}")
-async def get_beach_conditions(beach_id: str):
+async def get_beach_conditions_api(beach_id: str):
     if beach_id in GLOBAL_DATA_STORE: return GLOBAL_DATA_STORE[beach_id]
     return refresh_one_beach(beach_id)
 

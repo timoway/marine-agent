@@ -28,12 +28,13 @@ mcp = FastMCP(
     auth=None,
 )
 
-mcp_app = mcp.http_app(path="/")
+# Use sse_app for compatibility with fastmcp 3.2.4 on Render
+sse_app = mcp.sse_app()
 
 app = FastAPI(title="MarineAgent API")
 
 # Mount MCP under /mcp
-app.mount("/mcp", mcp_app)
+app.mount("/mcp", sse_app)
 
 # CORS
 app.add_middleware(

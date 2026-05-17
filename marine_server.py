@@ -320,6 +320,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# === ROOT ENDPOINT (fixed) ===
+@app.api_route("/", methods=["GET", "HEAD"])
+def root():
+    return {"status": "MarineAgent Live", "mcp_endpoint": "/mcp"}
+
 app.mount("/mcp", sse_app)
 
 @mcp.tool()

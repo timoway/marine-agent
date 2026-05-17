@@ -21,12 +21,15 @@ AGENT_API_KEY = os.environ.get("AGENT_API_KEY", "marine-secret-123")
 # --- CACHING & PERFORMANCE ---
 GLOBAL_DATA_STORE = {}
 
-# --- MCP SERVER (Updated for Grok compatibility) ---
+# --- MCP SERVER ---
 mcp = FastMCP(
     "MarineAgent",
     debug=True,
     auth=None,
 )
+
+# Use sse_app for compatibility
+sse_app = mcp.sse_app()
 
 # --- DATA: STATIONS & BEACHES ---
 NOAA_STATIONS = {
@@ -313,8 +316,8 @@ async def data_refresher_loop():
         print(f"[{datetime.datetime.now()}] Full Sync Starting...")
         for beach_id in BEACH_CONFIG:
             refresh_one_beach(beach_id)
-            await asyncio.sleep(1) # Be polite to APIs
-        await asyncio.sleep(300) # Every 5 minutes
+            await asyncio.sleep(1)
+        await asyncio.sleep(300)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -350,11 +353,10 @@ async def force_no_auth(request, call_next):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return response
 
-# FIXED MCP Mount - Use http_app for full compatibility (SSE + Streamable HTTP)
-mcp_app = mcp.http_app(path="/")
-app.mount("/mcp", mcp_app)
+# Mount MCP at /mcp using sse_app (compatible with fastmcp 3.x)
+app.mount("/mcp", sse_app)
 
-# Add at least one tool for Grok to discover
+# Tool for Grok
 @mcp.tool
 def get_beach_conditions(beach: str = "venice") -> dict:
     """Return real-time coastal conditions for any SWFL beach."""

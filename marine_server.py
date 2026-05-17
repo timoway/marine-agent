@@ -8,6 +8,7 @@ from typing import Optional
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 import uvicorn
 
 print("[STARTUP] marine_server.py loading...")
@@ -320,7 +321,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# === ROOT ENDPOINT (fixed) ===
+# Fix for "Invalid Host header" on Render
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
+
+# Root endpoint
 @app.api_route("/", methods=["GET", "HEAD"])
 def root():
     return {"status": "MarineAgent Live", "mcp_endpoint": "/mcp"}

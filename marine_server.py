@@ -9,7 +9,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
 import uvicorn
 
 print("[STARTUP] marine_server.py loading...")
@@ -23,7 +22,7 @@ mcp = FastMCP("MarineAgent", debug=True, auth=None)
 sse_app = mcp.sse_app()
 print("[STARTUP] sse_app created successfully")
 
-# ... (all your BEACH_CONFIG, helpers, fetchers, refresh_one_beach, etc. stay exactly the same)
+# (All your BEACH_CONFIG, helpers, fetchers, refresh_one_beach stay the same)
 
 async def data_refresher_loop():
     print("[STARTUP] Background refresher loop started (defensive mode)")
@@ -53,7 +52,6 @@ app = FastAPI(title="MarineAgent API", lifespan=lifespan)
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
-app.add_middleware(ProxyHeadersMiddleware)   # ← This is the new important line
 
 @app.api_route("/", methods=["GET", "HEAD"])
 def root():

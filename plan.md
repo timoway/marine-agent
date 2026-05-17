@@ -31,9 +31,15 @@ Add conversational functionality so users can chat with the Marine Agent (e.g., 
 3. **Telegram Bot**
 4. **Grok Remote MCP** (Endpoint enabled at `/mcp/sse`)
 
-## Next Steps
-- Create Streamlit chat prototype
-- Test with existing tools
-- Deploy options
+## AI Collaboration Instructions for Grok (Important)
+
+**Always use the GitHub connector tools** for any repository operations:
+- Listing commits, reading file contents, creating/updating/pushing files.
+- Verification of deploys and history.
+- Force pushes when restoring full code.
+
+**Do NOT** rely on raw.githubusercontent.com URLs for verification or status checks.
+- Use `github___list_commits`, `github___get_file_contents`, `github___push_files`, etc. via the connected tool.
+- This ensures accurate SHAs, proper history, and reliable updates.
 
 Update this plan as we progress.

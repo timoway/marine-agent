@@ -163,7 +163,7 @@ function App() {
             <h2>Can't Load Beach Data</h2>
             <p>{error}</p>
             <p style={{ opacity: 0.75, fontSize: '0.9rem', maxWidth: '420px', textAlign: 'center' }}>
-              Production needs the Render API at <code>marine-agent-api.onrender.com</code>. First deploy may take 1–2 minutes to wake up.
+              Production needs the Render API at <code>marine-agent.onrender.com</code>. First load after idle may take 30–60s to wake up.
             </p>
             <button onClick={() => window.location.reload()} className="retry-btn">Retry</button>
           </div>

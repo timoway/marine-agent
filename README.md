@@ -1,52 +1,62 @@
 # Marine Agent: SWFL Coastal Intelligence 🌊
-**Phase 1: Stable Prototype Complete**
 
-A high-performance, mobile-responsive coastal intelligence platform and AI agent for SWFL paddlers and beachgoers. Integrates real-time government sensors (NOAA, NWS, FWC) and scientific reports (Mote BCRS) for safety and activity planning.
+A mobile-first coastal intelligence PWA and AI agent for Gulf coast paddlers and beachgoers. Integrates NOAA, NWS, FWC, Mote BCRS, and radar data for safety and activity planning.
 
-## Phase 1 Achievements [COMPLETE]
-- [x] **Unified Backend:** FastAPI + MCP server with a single source of truth (`GLOBAL_DATA_STORE`).
-- [x] **Real-Time Sync:** Map markers and dashboards are 100% synchronized for all SWFL beaches.
-- [x] **Dynamic Flag System:** Official Florida Beach Flag logic (Green, Yellow, Red, Purple) integrated into map and UI.
-- [x] **Activity Status Bar:** Instant Green/Yellow/Red status for **Paddling**, **Swimming**, and **Beach**.
-- [x] **Predictive Timing:** Textual forecast parsing to provide "Best Window" timing tips.
-- [x] **Mobile-First UX:** Glassy, high-contrast UI optimized for iPhone Safari.
+**Production:** [marine-agent.vercel.app](https://marine-agent.vercel.app) (frontend) · [marine-agent.onrender.com](https://marine-agent.onrender.com) (API)
 
-## Roadmap (Phase 2)
-- [ ] **Radar Overlay:** Real-time weather radar integration for the Coast Map.
-- [ ] **PWA Support:** "Add to Home Screen" capability with manifest and service worker.
-- [ ] **Cloud Deployment:** Production build for Vercel/Render.
-- [ ] **Advanced AI Agent:** Expanding MCP tools for deeper astronomical and marine analysis.
+## Features
+
+- **21 Gulf beaches** — SWFL through Panhandle with live map markers (official water-now flag color)
+- **Today's verdict** — unified headline with separate *Water now* (official flag) and *Plan today* (forecast + radar)
+- **Activity status** — paddling, swimming, beach with per-activity reasons
+- **Nearby ranking** — best beaches within 50 mi of selected beach (`/api/rank`)
+- **NWS alerts** — ⚡ storm badge on map when warnings active at beach point
+- **Radar proximity** — cyan pulse when precipitation detected within 12 mi (same NEXRAD layer as map)
+- **Radar overlay** — live NWS mosaic on map; 60s refresh when enabled
+- **MCP agent** — `get_beach_conditions`, `rank_beaches` at `/mcp/sse`
+- **PWA** — installable on iPhone/Android with offline shell
 
 ## Tech Stack
-- **Backend:** Python 3.12, FastMCP, FastAPI
-- **Frontend:** React, Vite, Mapbox GL, Lucide Icons
-- **Data Sources:** NOAA CO-OPS, NWS Weather.gov, FWC-FWRI ArcGIS, Mote Marine Lab.
 
-## Getting Started
+- **Backend:** Python 3.12, FastAPI, FastMCP, Pillow (radar sampling)
+- **Frontend:** React, Vite, Mapbox GL, PWA
+- **Deploy:** Vercel (frontend + `/api` proxy) · Render (backend)
+- **Data:** NOAA CO-OPS, NWS Weather.gov, FWC HAB, Mote VisitBeaches, Open-Meteo, IEM NEXRAD
 
-### Installation
-1. Clone the repository:
-   \`\`\`bash
-   git clone https://github.com/yourusername/marine-agent.git
-   cd marine-agent
-   \`\`\`
+## Local Development
 
-2. Create and activate a virtual environment:
-   \`\`\`bash
-   python3 -m venv venv
-   source venv/bin/activate
-   \`\`\`
+```bash
+git clone https://github.com/timoway/marine-agent.git
+cd marine-agent
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+python marine_server.py          # API on :8000
 
-3. Install dependencies:
-   \`\`\`bash
-   pip install -r requirements.txt
-   \`\`\`
+cd web && npm install && npm run dev   # PWA on :5173
+```
 
-### Usage with Gemini CLI
-Add the server to your Gemini CLI configuration:
-\`\`\`bash
+## API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/health` | Ready status + cache count |
+| `GET /api/beaches_with_flags` | Map markers (flag color, storm/radar badges) |
+| `GET /api/conditions/{beach_id}` | Full beach dashboard payload |
+| `GET /api/rank?activity=paddling&beach_id=venice&radius_miles=50` | Nearby ranked beaches |
+
+## MCP Setup (Gemini CLI)
+
+```bash
 gemini mcp add marine-agent --command "python3" --path "$(pwd)/marine_server.py"
-\`\`\`
+```
+
+## Roadmap
+
+- [ ] In-app chat ("best paddle near Venice today?")
+- [ ] `when=tomorrow` ranking
+- [ ] Saved home beach
+- [ ] Atlantic coast expansion
 
 ## License
+
 MIT

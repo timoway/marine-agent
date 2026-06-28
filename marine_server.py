@@ -91,6 +91,11 @@ def distance_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     return R * c
 
+def _format_time_12h(dt: datetime.datetime) -> str:
+    hour = dt.hour % 12 or 12
+    suffix = "AM" if dt.hour < 12 else "PM"
+    return f"{hour}:{dt.minute:02d} {suffix}"
+
 def calculate_relative_position(lat1: float, lon1: float, lat2: float, lon2: float) -> str:
     d = distance_miles(lat1, lon1, lat2, lon2)
     dlat, dlon = math.radians(lat1 - lat2), math.radians(lon1 - lon2)
@@ -606,23 +611,45 @@ def _has_purple_hazard(data: dict) -> bool:
     jellyfish = str(data.get("mote_extras", {}).get("jellyfish", "None")).lower()
     return jellyfish not in ("none", "n/a", "")
 
-def _rank_tier(data: dict) -> str:
+def _rank_tier_level(data: dict) -> int:
+    """Lower level = better rank. 4=avoid, 3=NWS warning, 2=caution, 1=radar, 0=best."""
     if _has_red_tide(data):
-        return "avoid"
+        return 4
+    outlook = data.get("outlook", {})
+    if outlook.get("storm_badge"):
+        return 3
     if _has_purple_hazard(data):
+        return 2
+    radar = outlook.get("radar_proximity", {})
+    if radar.get("level") == "heavy":
+        return 2
+    if outlook.get("radar_nearby"):
+        return 1
+    return 0
+
+def _rank_tier(data: dict) -> str:
+    level = _rank_tier_level(data)
+    if level >= 4:
+        return "avoid"
+    if level >= 3:
+        return "warning"
+    if level >= 2:
         return "caution"
+    if level >= 1:
+        return "radar"
     return "best"
 
 def _rank_sort_key(data: dict, activity: str) -> tuple:
-    """Lower tuple = better rank. Red tide always sinks to avoid tier; purple near bottom."""
-    tier = 2 if _has_red_tide(data) else 1 if _has_purple_hazard(data) else 0
-    activity_status = _activity_status_value(data.get("outlook", {}).get("activities", {}), activity)
-    activity_score = ACTIVITY_RANK.get(activity_status, 2)
+    """Lower tuple = better rank."""
+    outlook = data.get("outlook", {})
+    tier_level = _rank_tier_level(data)
+    verdict_status = outlook.get("verdict", {}).get("status")
+    activity_status = _activity_status_value(outlook.get("activities", {}), activity)
+    status_score = ACTIVITY_RANK.get(verdict_status or activity_status, 2)
     wind = data.get("weather", {}).get("wind_mph", 99)
     surf = data.get("surf", {}).get("height", 99)
-    red_tide_penalty = 1 if _has_red_tide(data) else 0
-    purple_penalty = 1 if _has_purple_hazard(data) else 0
-    return (tier, activity_score, wind, surf, red_tide_penalty, purple_penalty)
+    radar_dbz = outlook.get("radar_proximity", {}).get("max_dbz", 0)
+    return (tier_level, status_score, wind, surf, -radar_dbz)
 
 def _rank_summary(data: dict, activity: str) -> str:
     parts = [
@@ -635,6 +662,11 @@ def _rank_summary(data: dict, activity: str) -> str:
         parts.append(f"red tide ({red_tide})")
     if _has_purple_hazard(data):
         parts.append("purple flag / stinging life")
+    outlook = data.get("outlook", {})
+    if outlook.get("storm_badge"):
+        parts.append("NWS weather warning")
+    elif outlook.get("radar_nearby"):
+        parts.append(f"radar {outlook.get('radar_proximity', {}).get('max_dbz', 0)} dBZ nearby")
     return "; ".join(parts)
 
 DEFAULT_NEARBY_RADIUS_MILES = 50
@@ -920,37 +952,56 @@ def _get_water_temp(config: dict, modeled_sst_f: Optional[float]) -> tuple[str, 
     return "--", "Unavailable"
 
 def _get_tide_data(config: dict, modeled_sst_f: Optional[float] = None):
+    water_temp, water_temp_source = _get_water_temp(config, modeled_sst_f)
+    station_info = NOAA_STATIONS.get(config['tide_id'], {"lat": config['lat'], "lon": config['lon']})
+    dist = calculate_relative_position(station_info["lat"], station_info["lon"], config["lat"], config["lon"])
+    fallback = {
+        "predictions": [],
+        "water_temp": water_temp,
+        "water_temp_source": water_temp_source,
+        "current_status": "N/A",
+        "trend": "N/A",
+        "next_event": "Tides Unavailable",
+        "source": f"NOAA {config['tide_id']} ({dist})",
+    }
     try:
         now = _fl_now()
         begin = now.strftime("%Y%m%d")
-        url = f"https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date={begin}&range=48&station={config['tide_id']}&product=predictions&datum=MLLW&time_zone=lst_ldt&interval=hilo&units=english&format=json"
-        preds = requests.get(url, timeout=5).json().get('predictions', [])
+        url = (
+            f"https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date={begin}&range=48"
+            f"&station={config['tide_id']}&product=predictions&datum=MLLW&time_zone=lst_ldt"
+            "&interval=hilo&units=english&format=json"
+        )
+        payload = requests.get(url, timeout=8).json()
+        if payload.get("error"):
+            print(f"[WARN] NOAA tides {config['tide_id']}: {payload['error']}")
+            return fallback
+        preds = payload.get("predictions", [])
+        if not preds:
+            return fallback
+
         now_str = now.strftime("%Y-%m-%d %H:%M")
-        future = [p for p in preds if p['t'] >= now_str]
+        future = [p for p in preds if p["t"] >= now_str]
         if not future:
             future = preds[:3]
-        
-        next_tide = future[0]
-        next_type = "High" if next_tide['type'] == 'H' else "Low"
-        time_obj = datetime.datetime.strptime(next_tide['t'], "%Y-%m-%d %H:%M")
-        next_time_str = time_obj.strftime("%-I:%M %p")
-        next_event_string = f"Next {next_type} Tide {next_time_str}"
 
-        water_temp, water_temp_source = _get_water_temp(config, modeled_sst_f)
-        
-        station_info = NOAA_STATIONS.get(config['tide_id'], {"lat": config['lat'], "lon": config['lon']})
-        dist = calculate_relative_position(station_info["lat"], station_info["lon"], config["lat"], config["lon"])
+        next_tide = future[0]
+        next_type = "High" if next_tide["type"] == "H" else "Low"
+        time_obj = datetime.datetime.strptime(next_tide["t"], "%Y-%m-%d %H:%M")
+        next_event_string = f"Next {next_type} Tide {_format_time_12h(time_obj)}"
+
         return {
-            "predictions": future[:3], 
+            "predictions": future[:3],
             "water_temp": water_temp,
             "water_temp_source": water_temp_source,
-            "current_status": f"{'High' if future[0]['type'] == 'L' else 'Low'} Tide", 
-            "trend": "Rising" if future[0]['type'] == 'H' else "Falling", 
+            "current_status": f"{'High' if future[0]['type'] == 'L' else 'Low'} Tide",
+            "trend": "Rising" if future[0]["type"] == "H" else "Falling",
             "next_event": next_event_string,
-            "source": f"NOAA {config['tide_id']} ({dist})"
+            "source": f"NOAA {config['tide_id']} ({dist})",
         }
-    except Exception:
-        return {"predictions": [], "water_temp": "--", "water_temp_source": "Unavailable", "current_status": "N/A", "trend": "N/A", "next_event": "Tides Unavailable", "source": "N/A"}
+    except Exception as e:
+        print(f"[WARN] tide fetch {config.get('name', config['tide_id'])}: {e}")
+        return fallback
 
 def _get_skywatch():
     try:
@@ -1100,10 +1151,20 @@ async def data_refresher_loop():
             print(f"[ERROR] refresher loop error (continuing): {e}")
             await asyncio.sleep(60)
 
+async def _warm_cache_on_startup() -> None:
+    print("[STARTUP] Warming beach cache for cold-start readiness...")
+    for beach_id in BEACH_CONFIG:
+        try:
+            await asyncio.to_thread(refresh_one_beach, beach_id)
+        except Exception as e:
+            print(f"[WARN] warm cache {beach_id} failed (non-fatal): {str(e)[:80]}")
+    print(f"[STARTUP] Cache warm complete ({len(GLOBAL_DATA_STORE)} beaches)")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("[STARTUP] lifespan starting - launching background task defensively")
     try:
+        asyncio.create_task(_warm_cache_on_startup())
         asyncio.create_task(data_refresher_loop())
     except Exception as e:
         print(f"[WARN] background task creation failed (non-fatal): {e}")
@@ -1221,10 +1282,15 @@ async def rank_beaches_api(
     )
 
 @app.get("/health")
+@app.get("/api/health")
 async def health():
+    cached = len(GLOBAL_DATA_STORE)
+    ready = cached > 0
     return {
-        "status": "ok",
-        "beaches_cached": len(GLOBAL_DATA_STORE),
+        "status": "ok" if cached >= len(BEACH_CONFIG) else ("warming" if ready else "starting"),
+        "ready": ready,
+        "fully_cached": cached >= len(BEACH_CONFIG),
+        "beaches_cached": cached,
         "beaches_total": len(BEACH_CONFIG),
         "mcp_endpoint": "/mcp/sse",
     }

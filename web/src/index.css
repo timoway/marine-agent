@@ -267,6 +267,31 @@ body {
   background: rgba(248, 113, 113, 0.15);
 }
 
+.rank-tier-badge.warning {
+  color: #fde68a;
+  background: rgba(250, 204, 21, 0.18);
+}
+
+.rank-tier-badge.radar {
+  color: #7dd3fc;
+  background: rgba(56, 189, 248, 0.15);
+}
+
+.wake-message {
+  margin: 16px 0 0;
+  font-size: 0.95rem;
+  color: #e2e8f0;
+  text-align: center;
+}
+
+.wake-hint {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  color: #64748b;
+  text-align: center;
+  max-width: 280px;
+}
+
 .rank-empty {
   margin: 0;
   font-size: 0.75rem;

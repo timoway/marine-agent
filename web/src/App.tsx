@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import MapGL, { Marker, NavigationControl, Source, Layer } from 'react-map-gl/mapbox';
 import InstallPrompt from './InstallPrompt';
-import { apiFetch } from './api';
+import { apiFetch, waitForApiReady } from './api';
 import { useMediaQuery } from './useMediaQuery';
 import { formatFloridaTime } from './format';
 
@@ -25,7 +25,7 @@ interface RankResult {
   rank: number;
   beach_id: string;
   name: string;
-  rank_tier: 'best' | 'caution' | 'avoid';
+  rank_tier: 'best' | 'radar' | 'caution' | 'warning' | 'avoid';
   activity_status: string;
   wind_mph: number;
   surf_ft: number;
@@ -119,6 +119,8 @@ function App() {
   const [rankData, setRankData] = useState<RankResponse | null>(null);
   const [rankLoading, setRankLoading] = useState(false);
   const [rankError, setRankError] = useState<string | null>(null);
+  const [wakingUp, setWakingUp] = useState(false);
+  const [wakeMessage, setWakeMessage] = useState('Waking up coastal sensors…');
 
   const closeSidebar = () => setSidebarOpen(false);
   const openSidebar = () => setSidebarOpen(true);
@@ -156,30 +158,40 @@ function App() {
   useEffect(() => {
     let cancelled = false;
 
-    const fetchConditions = (showLoading: boolean) => {
+    const fetchConditions = async (showLoading: boolean) => {
       if (showLoading) {
         setLoading(true);
         setError(null);
+        setWakingUp(true);
+        setWakeMessage('Waking up coastal sensors…');
       }
-      apiFetch<MarineData>(`/conditions/${selectedBeach}${maxAgeParam ? `?${maxAgeParam.slice(1)}` : ''}`)
-        .then(json => {
+      try {
+        if (showLoading) {
+          await waitForApiReady();
           if (cancelled) return;
-          if ('error' in json && json.error) throw new Error(String(json.error));
-          setData(json);
+          setWakeMessage('Loading beach conditions…');
+        }
+        const json = await apiFetch<MarineData>(
+          `/conditions/${selectedBeach}${maxAgeParam ? `?${maxAgeParam.slice(1)}` : ''}`,
+        );
+        if (cancelled) return;
+        if ('error' in json && json.error) throw new Error(String(json.error));
+        setData(json);
+        setLoading(false);
+        setWakingUp(false);
+        if (showLoading && isMobile) closeSidebar();
+      } catch (err) {
+        if (cancelled) return;
+        if (showLoading) {
+          setError(err instanceof Error ? err.message : 'Failed to load beach data');
           setLoading(false);
-          if (showLoading && isMobile) closeSidebar();
-        })
-        .catch(err => {
-          if (cancelled) return;
-          if (showLoading) {
-            setError(err instanceof Error ? err.message : 'Failed to load beach data');
-            setLoading(false);
-          }
-        });
+          setWakingUp(false);
+        }
+      }
     };
 
     fetchConditions(true);
-    const interval = setInterval(() => fetchConditions(false), refreshMs);
+    const interval = setInterval(() => { fetchConditions(false); }, refreshMs);
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -306,7 +318,10 @@ function App() {
                   </span>
                   {result.rank_tier !== 'best' && (
                     <span className={`rank-tier-badge ${result.rank_tier}`}>
-                      {result.rank_tier === 'avoid' ? 'Red tide' : 'Caution'}
+                      {result.rank_tier === 'avoid' ? 'Red tide'
+                        : result.rank_tier === 'warning' ? 'NWS alert'
+                        : result.rank_tier === 'radar' ? 'Radar'
+                        : 'Caution'}
                     </span>
                   )}
                 </button>
@@ -454,7 +469,11 @@ function App() {
              </MapGL>
           </div>
         ) : loading ? (
-          <div className="loading-spinner"><div className="spinner">🌊</div></div>
+          <div className="loading-spinner">
+            <div className="spinner">🌊</div>
+            {wakingUp && <p className="wake-message">{wakeMessage}</p>}
+            {wakingUp && <p className="wake-hint">First load after idle can take up to 60 seconds on Render.</p>}
+          </div>
         ) : data ? (
           <>
             <div className="header mobile-header">

@@ -112,6 +112,282 @@ def calculate_flag(wave_ft: float, wind_mph: float, red_tide_status: str, jellyf
 
 ACTIVITY_RANK = {"Green": 0, "Yellow": 1, "Red": 2}
 VALID_ACTIVITIES = frozenset({"paddling", "swimming", "beach"})
+VERDICT_COLORS = {"Green": "#4ade80", "Yellow": "#facc15", "Red": "#f87171"}
+LIKELIHOOD_RANK = {"none": 0, "chance": 1, "likely": 2, "active": 3, "severe": 4}
+
+def _max_status(*statuses: str) -> str:
+    return max(statuses, key=lambda s: ACTIVITY_RANK.get(s, 2))
+
+def _activity_status_value(activities: dict, activity: str) -> str:
+    val = activities.get(activity, "Red")
+    if isinstance(val, dict):
+        return val.get("status", "Red")
+    return val
+
+def _storm_likelihood_in_text(text: str) -> str:
+    t = text.lower()
+    if any(k in t for k in ("hurricane warning", "tropical storm warning", "tornado warning")):
+        return "severe"
+    if any(k in t for k in ("severe thunderstorm warning", "flash flood warning")):
+        return "active"
+    if any(k in t for k in ("hurricane watch", "tropical storm watch")):
+        return "likely"
+    hedged = ("chance of", "possible", "isolated", "scattered", "slight chance", "may produce", "could see")
+    storm_terms = ("thunderstorms", "thunderstorm", "storms and", "storms likely", "storms expected", "storms possible")
+    has_storm = any(term in t for term in storm_terms) or ("showers" in t and "thunder" in t)
+    if has_storm:
+        if any(h in t for h in hedged):
+            if any(s in t for s in ("likely", "expected", "definite", "numerous")):
+                return "likely"
+            return "chance"
+        return "active"
+    if "rain" in t or "showers" in t:
+        if any(h in t for h in hedged):
+            return "chance"
+        return "likely"
+    return "none"
+
+def _max_likelihood(*levels: str) -> str:
+    return max(levels, key=lambda lvl: LIKELIHOOD_RANK.get(lvl, 0))
+
+def _analyze_weather_situation(forecast: dict) -> dict:
+    now = _fl_now()
+    hour = now.hour
+    periods = forecast.get("periods", [])
+    hazards = forecast.get("hazards", {})
+
+    if hazards.get("hurricane_warning") or hazards.get("tropical_storm_warning") or hazards.get("tornado_warning"):
+        advisory_level = "severe"
+        advisory_reason = "Active NWS warning for tropical or severe weather"
+    elif hazards.get("severe_thunderstorm_warning"):
+        advisory_level = "active"
+        advisory_reason = "Severe thunderstorm warning in effect"
+    elif hazards.get("hurricane_watch") or hazards.get("tropical_storm_watch"):
+        advisory_level = "likely"
+        advisory_reason = "Tropical weather watch in effect"
+    else:
+        advisory_level = "none"
+        advisory_reason = ""
+
+    current_text = ""
+    later_text = ""
+    for i, period in enumerate(periods[:4]):
+        name = period.get("name", "").lower()
+        text = period.get("detailedForecast", "")
+        full = f"{name} {text}"
+        if "afternoon" in name:
+            if hour < 12:
+                later_text += f" {full}"
+            else:
+                current_text += f" {full}"
+        elif "morning" in name or name == "today":
+            if hour < 12:
+                current_text += f" {full}"
+            else:
+                later_text += f" {full}"
+        elif "tonight" in name or "evening" in name:
+            later_text += f" {full}"
+        elif i == 0:
+            if hour < 12 and "afternoon" in text.lower():
+                current_text += f" {name}"
+                later_text += f" {text}"
+            else:
+                current_text += f" {full}"
+
+    if not current_text.strip() and periods:
+        current_text = periods[0].get("detailedForecast", "")
+    if not later_text.strip() and len(periods) > 1:
+        later_text = periods[1].get("detailedForecast", "")
+
+    summary = forecast.get("summary", "")
+    now_likelihood = _max_likelihood(_storm_likelihood_in_text(current_text))
+    later_likelihood = _max_likelihood(_storm_likelihood_in_text(later_text))
+    if hour < 12:
+        later_likelihood = _max_likelihood(later_likelihood, _storm_likelihood_in_text(summary))
+    else:
+        now_likelihood = _max_likelihood(now_likelihood, _storm_likelihood_in_text(summary))
+
+    return {
+        "hour": hour,
+        "advisory_level": advisory_level,
+        "advisory_reason": advisory_reason,
+        "now_likelihood": now_likelihood,
+        "later_likelihood": later_likelihood,
+        "forecast_headline": summary,
+        "current_period": periods[0].get("name", "") if periods else "",
+    }
+
+def _forecast_plan_status(situation: dict) -> tuple[str, str]:
+    advisory = situation["advisory_level"]
+    if advisory in ("severe", "active"):
+        return "Red", situation["advisory_reason"] or "Active weather advisory"
+    if advisory == "likely":
+        return "Red", situation["advisory_reason"] or "Tropical weather threat"
+
+    now_lvl = situation["now_likelihood"]
+    later_lvl = situation["later_likelihood"]
+    hour = situation["hour"]
+
+    if now_lvl in ("severe", "active"):
+        return "Red", "Storms active or imminent right now"
+    if now_lvl == "likely":
+        return "Red", "Storms likely in the current period"
+
+    if hour < 12:
+        if later_lvl == "likely":
+            return "Yellow", "Storms likely this afternoon — best window is this morning"
+        if later_lvl == "chance":
+            return "Green", "Good conditions now — storms possible this afternoon"
+        if later_lvl == "active":
+            return "Yellow", "Storm risk building toward afternoon"
+        return "Green", "Favorable conditions expected today"
+
+    if now_lvl == "likely":
+        return "Yellow", "Storms likely this afternoon"
+    if now_lvl == "chance":
+        return "Yellow", "Storms possible this afternoon"
+    if later_lvl in ("likely", "active"):
+        return "Yellow", "Storms possible later today"
+    if later_lvl == "chance":
+        return "Yellow", "Isolated storms possible later"
+    return "Green", "Conditions look favorable for the rest of today"
+
+def _physical_activity_status(activity: str, wave_ft: float, wind_mph: float, red_tide: str) -> tuple[str, str]:
+    if activity == "paddling":
+        if wind_mph > 15 or wave_ft > 2.5:
+            return "Red", f"High wind ({wind_mph} mph) or surf ({wave_ft:.1f} ft)"
+        if wind_mph > 10:
+            return "Yellow", f"Moderate wind ({wind_mph} mph)"
+        return "Green", f"Calm wind ({wind_mph} mph) and light surf ({wave_ft:.1f} ft)"
+    if activity == "swimming":
+        if wave_ft > 3.0 or red_tide != "Not Present":
+            reason = "Red tide present" if red_tide != "Not Present" else f"High surf ({wave_ft:.1f} ft)"
+            return "Red", reason
+        if wave_ft > 1.5:
+            return "Yellow", f"Moderate surf ({wave_ft:.1f} ft)"
+        return "Green", f"Light surf ({wave_ft:.1f} ft)"
+    if wave_ft > 4.0 or wind_mph > 22:
+        return "Yellow", f"Windy or rough surf ({wind_mph} mph, {wave_ft:.1f} ft)"
+    return "Green", "Comfortable beach conditions"
+
+def _forecast_activity_status(activity: str, situation: dict) -> tuple[str, str]:
+    advisory = situation["advisory_level"]
+    if advisory in ("severe", "active", "likely"):
+        return "Red", situation["advisory_reason"] or "Weather advisory in effect"
+
+    now_lvl = situation["now_likelihood"]
+    later_lvl = situation["later_likelihood"]
+    hour = situation["hour"]
+
+    if now_lvl in ("severe", "active", "likely"):
+        return "Red", "Storms in the current period"
+
+    if hour < 12:
+        if later_lvl == "likely":
+            return "Yellow", "Storms likely this afternoon"
+        if later_lvl == "chance":
+            return "Green", "Morning window before possible afternoon storms"
+        return "Green", "No significant storm risk forecast"
+
+    if now_lvl == "likely":
+        return "Yellow", "Storms likely this afternoon"
+    if now_lvl == "chance":
+        return "Yellow", "Storms possible this afternoon"
+    if later_lvl in ("likely", "active"):
+        return "Yellow", "Storms possible later today"
+    if later_lvl == "chance":
+        return "Yellow", "Isolated storms possible later"
+    return "Green", "No significant storm risk forecast"
+
+def _build_activities(situation: dict, wave_ft: float, wind_mph: float, red_tide: str) -> dict:
+    activities = {}
+    for name in VALID_ACTIVITIES:
+        phys_status, phys_reason = _physical_activity_status(name, wave_ft, wind_mph, red_tide)
+        fc_status, fc_reason = _forecast_activity_status(name, situation)
+        status = _max_status(phys_status, fc_status)
+        if status == phys_status and phys_status != "Green":
+            reason = phys_reason
+        elif status == fc_status and fc_status != "Green":
+            reason = fc_reason
+        elif status == "Green":
+            reason = phys_reason if phys_status == "Green" else fc_reason
+        else:
+            reason = fc_reason if fc_status != "Green" else phys_reason
+        activities[name] = {"status": status, "reason": reason}
+    return activities
+
+def _activities_summary(activities: dict) -> Optional[str]:
+    reasons = {a["reason"] for a in activities.values() if a["status"] != "Green"}
+    if len(reasons) == 1:
+        return reasons.pop()
+    statuses = {a["status"] for a in activities.values()}
+    if statuses == {"Green"}:
+        return "All activities look good right now"
+    return None
+
+def _compute_verdict(flag: dict, plan_status: str, plan_reason: str, situation: dict, wave_ft: float, wind_mph: float) -> dict:
+    if flag["label"] == "DOUBLE RED":
+        headline, status = "Avoid — water closed", "Red"
+        reason = "Dangerous surf or severe biological hazard"
+    elif situation["advisory_level"] == "severe":
+        headline, status = "Avoid — severe weather advisory", "Red"
+        reason = situation["advisory_reason"]
+    elif flag["label"] == "RED FLAG":
+        headline, status = "High hazard — stay out of the water", "Red"
+        reason = f"Official red flag conditions ({wave_ft:.1f} ft surf, {wind_mph} mph wind)"
+    elif situation["advisory_level"] in ("active", "likely"):
+        headline, status = "Not recommended — weather advisory", "Red"
+        reason = situation["advisory_reason"]
+    elif plan_status == "Red":
+        headline, status = "Not recommended right now", "Red"
+        reason = plan_reason
+    elif plan_status == "Yellow":
+        headline = "Go with caution"
+        status = "Yellow"
+        reason = plan_reason
+    elif flag["label"] == "PURPLE FLAG":
+        headline, status = "Caution — stinging marine life", "Yellow"
+        reason = "Purple flag conditions — check Mote report"
+    elif flag["label"] == "YELLOW FLAG":
+        headline, status = "Okay with caution", "Yellow"
+        reason = f"Moderate surf or wind ({wave_ft:.1f} ft, {wind_mph} mph). {plan_reason}"
+    else:
+        headline, status = "Good to go", "Green"
+        reason = plan_reason
+
+    return {
+        "headline": headline,
+        "status": status,
+        "color": VERDICT_COLORS[status],
+        "reason": reason,
+    }
+
+def _build_outlook(flag: dict, wave_ft: float, wind_mph: float, red_tide: str, mote: dict, forecast: dict) -> dict:
+    situation = _analyze_weather_situation(forecast)
+    plan_status, plan_reason = _forecast_plan_status(situation)
+    activities = _build_activities(situation, wave_ft, wind_mph, red_tide)
+    verdict = _compute_verdict(flag, plan_status, plan_reason, situation, wave_ft, wind_mph)
+    official_reason = _get_daily_outlook(wave_ft, wind_mph, red_tide, mote, forecast)["reason"]
+
+    return {
+        **flag,
+        "reason": official_reason,
+        "water_now": {
+            "label": flag["label"],
+            "vibe": flag["vibe"],
+            "color": flag["color"],
+            "summary": f"{wave_ft:.1f} ft surf · {wind_mph} mph wind",
+        },
+        "plan_today": {
+            "status": plan_status,
+            "color": VERDICT_COLORS[plan_status],
+            "headline": plan_reason,
+            "forecast": situation["forecast_headline"],
+        },
+        "verdict": verdict,
+        "activities": activities,
+        "activities_summary": _activities_summary(activities),
+    }
 
 def _has_red_tide(data: dict) -> bool:
     return data.get("red_tide", {}).get("status", "Not Present") != "Not Present"
@@ -133,7 +409,7 @@ def _rank_tier(data: dict) -> str:
 def _rank_sort_key(data: dict, activity: str) -> tuple:
     """Lower tuple = better rank. Red tide always sinks to avoid tier; purple near bottom."""
     tier = 2 if _has_red_tide(data) else 1 if _has_purple_hazard(data) else 0
-    activity_status = data.get("outlook", {}).get("activities", {}).get(activity, "Red")
+    activity_status = _activity_status_value(data.get("outlook", {}).get("activities", {}), activity)
     activity_score = ACTIVITY_RANK.get(activity_status, 2)
     wind = data.get("weather", {}).get("wind_mph", 99)
     surf = data.get("surf", {}).get("height", 99)
@@ -143,7 +419,7 @@ def _rank_sort_key(data: dict, activity: str) -> tuple:
 
 def _rank_summary(data: dict, activity: str) -> str:
     parts = [
-        f"{activity.title()}: {data.get('outlook', {}).get('activities', {}).get(activity, 'Unknown')}",
+        f"{activity.title()}: {_activity_status_value(data.get('outlook', {}).get('activities', {}), activity)}",
         f"{data.get('weather', {}).get('wind_mph', '--')} mph wind",
         f"{data.get('surf', {}).get('height', '--')} ft surf",
     ]
@@ -221,7 +497,7 @@ def rank_beaches_data(
             "beach_id": candidate_id,
             "name": config["name"],
             "rank_tier": _rank_tier(data),
-            "activity_status": data.get("outlook", {}).get("activities", {}).get(activity, "Unknown"),
+            "activity_status": _activity_status_value(data.get("outlook", {}).get("activities", {}), activity),
             "flag": data.get("outlook", {}).get("label", "UNKNOWN"),
             "wind_mph": data.get("weather", {}).get("wind_mph"),
             "surf_ft": data.get("surf", {}).get("height"),
@@ -341,15 +617,58 @@ def _get_nws_forecast(config: dict):
         alerts_url = f"https://api.weather.gov/alerts/active?point={config['lat']},{config['lon']}"
         a_r = requests.get(alerts_url, headers={'User-Agent': 'MarineAgent/1.0'}, timeout=8).json()
         rip = "Low Risk"
+        hazards = {
+            "hurricane_warning": False,
+            "hurricane_watch": False,
+            "tropical_storm_warning": False,
+            "tropical_storm_watch": False,
+            "severe_thunderstorm_warning": False,
+            "tornado_warning": False,
+        }
         for alert in a_r.get('features', []):
-            if "rip current" in alert['properties']['headline'].lower():
+            props = alert.get('properties', {})
+            headline = props.get('headline', '').lower()
+            event = props.get('event', '').lower()
+            combined = f"{headline} {event}"
+            if "rip current" in combined:
                 rip = "High Risk (NWS Alert)"
-            
+            if "hurricane warning" in combined:
+                hazards["hurricane_warning"] = True
+            elif "hurricane watch" in combined:
+                hazards["hurricane_watch"] = True
+            if "tropical storm warning" in combined:
+                hazards["tropical_storm_warning"] = True
+            elif "tropical storm watch" in combined:
+                hazards["tropical_storm_watch"] = True
+            if "severe thunderstorm warning" in combined:
+                hazards["severe_thunderstorm_warning"] = True
+            if "tornado warning" in combined:
+                hazards["tornado_warning"] = True
+
         station_info = NWS_STATIONS.get(config['nws_station'], {"lat": config['lat'], "lon": config['lon']})
         dist = calculate_relative_position(station_info["lat"], station_info["lon"], config["lat"], config["lon"])
-        return {"summary": summary, "rip_current": rip, "source": f"NWS {config['nws_station']} ({dist})", "periods": periods}
+        return {
+            "summary": summary,
+            "rip_current": rip,
+            "source": f"NWS {config['nws_station']} ({dist})",
+            "periods": periods,
+            "hazards": hazards,
+        }
     except Exception:
-        return {"summary": "Forecast intermittent.", "rip_current": "Low Risk", "source": "NWS", "periods": []}
+        return {
+            "summary": "Forecast intermittent.",
+            "rip_current": "Low Risk",
+            "source": "NWS",
+            "periods": [],
+            "hazards": {
+                "hurricane_warning": False,
+                "hurricane_watch": False,
+                "tropical_storm_warning": False,
+                "tropical_storm_watch": False,
+                "severe_thunderstorm_warning": False,
+                "tornado_warning": False,
+            },
+        }
 
 def _get_water_temp(config: dict, modeled_sst_f: Optional[float]) -> tuple[str, str]:
     try:
@@ -500,32 +819,6 @@ def refresh_one_beach(beach_id: str) -> dict:
         tides = _get_tide_data(config, modeled_sst_f=sst_f)
         
         flag = calculate_flag(wave_ft, wind_mph, red_tide, mote["jellyfish"].lower() != "none")
-        
-        summary_now = forecast["summary"].lower()
-        is_stormy_now = "thunderstorms" in summary_now or "showers" in summary_now
-        
-        day_forecast = ""
-        for p in forecast.get("periods", [])[:2]:
-            if "night" not in p["name"].lower():
-                day_forecast = p["detailedForecast"].lower()
-                break
-        
-        beach_status = "Green"
-        if is_stormy_now:
-            beach_status = "Red"
-        elif "thunderstorms" in day_forecast or "rain" in day_forecast:
-            if any(x in day_forecast for x in ["tonight", "evening", "late"]):
-                beach_status = "Yellow"
-            else:
-                beach_status = "Red"
-        elif wind_mph > 22 or wave_ft > 4.0:
-            beach_status = "Yellow"
-
-        activities = {
-            "paddling": "Red" if wind_mph > 15 or wave_ft > 2.5 or is_stormy_now else "Yellow" if wind_mph > 10 else "Green",
-            "swimming": "Red" if wave_ft > 3.0 or red_tide != "Not Present" or is_stormy_now else "Yellow" if wave_ft > 1.5 else "Green",
-            "beach": beach_status
-        }
 
         data = {
             "beach": config["name"],
@@ -546,11 +839,7 @@ def refresh_one_beach(beach_id: str) -> dict:
             "weather": {"temp_f": temp_f, "wind_mph": wind_mph, "wind_dir": wind_dir},
             "red_tide": {"status": red_tide},
             "mote_extras": mote,
-            "outlook": {
-                **flag,
-                "reason": _get_daily_outlook(wave_ft, wind_mph, red_tide, mote, forecast)["reason"],
-                "activities": activities
-            },
+            "outlook": _build_outlook(flag, wave_ft, wind_mph, red_tide, mote, forecast),
             "teeth": _compute_shark_teeth_score(config, wave_ft, tides, mote),
             "clarity": {"label": "Good" if wave_ft < 1.5 else "Fair", "feet": round(max(1, 15 - (wave_ft * 4)), 0)}
         }

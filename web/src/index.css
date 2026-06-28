@@ -620,11 +620,64 @@ body {
   pointer-events: none;
 }
 
+.outlook-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.outlook-panel {
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid #334155;
+  border-top: 3px solid;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.outlook-panel-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+}
+
+.outlook-panel-value {
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.outlook-panel-meta {
+  font-size: 0.76rem;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.outlook-panel-note {
+  font-size: 0.68rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.activity-reasons {
+  margin-top: 10px;
+}
+
 .activity-note {
   margin: 14px 0 0;
   font-size: 0.78rem;
   color: #64748b;
   line-height: 1.4;
+}
+
+.activity-reasons .activity-note {
+  margin-top: 6px;
 }
 
 .teeth-card {
@@ -860,6 +913,7 @@ body {
   }
   .beach-name { font-size: 1.5rem; }
   .hero-value { font-size: 1.75rem; }
+  .outlook-split { grid-template-columns: 1fr; }
   .card { padding: 18px; border-radius: 16px; }
   .card-value { font-size: 1.5rem; }
   .reason-text { font-size: 0.95rem; }

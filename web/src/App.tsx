@@ -49,6 +49,24 @@ const RANK_ACTIVITY_LABELS: Record<RankActivity, string> = {
   beach: 'Beach',
 };
 
+function activityStatus(
+  activities: MarineData['outlook']['activities'] | undefined,
+  key: keyof MarineData['outlook']['activities'],
+): string {
+  const val = activities?.[key];
+  if (!val) return 'Red';
+  return typeof val === 'string' ? val : val.status;
+}
+
+function activityReason(
+  activities: MarineData['outlook']['activities'] | undefined,
+  key: keyof MarineData['outlook']['activities'],
+): string | null {
+  const val = activities?.[key];
+  if (!val || typeof val === 'string') return null;
+  return val.reason;
+}
+
 interface MarineData {
   beach: string;
   lat: number;
@@ -65,8 +83,16 @@ interface MarineData {
     label: string; 
     vibe: string; 
     reason: string; 
-    color: string; 
-    activities: { paddling: string; swimming: string; beach: string; };
+    color: string;
+    water_now?: { label: string; vibe: string; color: string; summary: string; };
+    plan_today?: { status: string; color: string; headline: string; forecast: string; };
+    verdict?: { headline: string; status: string; color: string; reason: string; };
+    activities: {
+      paddling: { status: string; reason: string; } | string;
+      swimming: { status: string; reason: string; } | string;
+      beach: { status: string; reason: string; } | string;
+    };
+    activities_summary?: string | null;
   };
   teeth: { score: number; label: string; tip: string; } | null;
   clarity: { label: string; feet: number; };
@@ -467,26 +493,60 @@ function App() {
             </div>
 
             <div className="grid">
-              <div className="card hero-card" style={{ borderLeft: `6px solid ${data.outlook?.color ?? '#3b82f6'}` }}>
-                <div className="card-title"><Calendar size={18} /> Daily Outlook</div>
-                <div className="card-value hero-value">{data.outlook?.label ?? '--'}</div>
-                <div className="card-subvalue reason-text">{data.outlook?.reason ?? '--'}</div>
-                
-                {/* ACTIVITY STATUS LINE */}
+              <div className="card hero-card" style={{ borderLeft: `6px solid ${data.outlook?.verdict?.color ?? data.outlook?.color ?? '#3b82f6'}` }}>
+                <div className="card-title"><Calendar size={18} /> Today&apos;s Verdict</div>
+                <div className="card-value hero-value">{data.outlook?.verdict?.headline ?? data.outlook?.label ?? '--'}</div>
+                <div className="card-subvalue reason-text">{data.outlook?.verdict?.reason ?? data.outlook?.reason ?? '--'}</div>
+
+                <div className="outlook-split">
+                  <div className="outlook-panel" style={{ borderColor: data.outlook?.water_now?.color ?? data.outlook?.color }}>
+                    <span className="outlook-panel-label">Water now</span>
+                    <span className="outlook-panel-value" style={{ color: data.outlook?.water_now?.color ?? data.outlook?.color }}>
+                      {data.outlook?.water_now?.label ?? data.outlook?.label ?? '--'}
+                    </span>
+                    <span className="outlook-panel-meta">{data.outlook?.water_now?.summary ?? data.outlook?.reason}</span>
+                    <span className="outlook-panel-note">Official beach flag</span>
+                  </div>
+                  <div className="outlook-panel" style={{ borderColor: data.outlook?.plan_today?.color ?? '#64748b' }}>
+                    <span className="outlook-panel-label">Plan today</span>
+                    <span className="outlook-panel-value" style={{ color: data.outlook?.plan_today?.color ?? '#94a3b8' }}>
+                      {data.outlook?.plan_today?.status ?? '--'}
+                    </span>
+                    <span className="outlook-panel-meta">{data.outlook?.plan_today?.headline ?? '--'}</span>
+                    {data.outlook?.plan_today?.forecast && (
+                      <span className="outlook-panel-note">{data.outlook.plan_today.forecast}</span>
+                    )}
+                  </div>
+                </div>
+
                 <div className="activity-status-line">
                    <div className="status-item">
-                      <span className={`dot ${data.outlook?.activities?.paddling}`}></span> Paddling
+                      <span className={`dot ${activityStatus(data.outlook?.activities, 'paddling')}`}></span> Paddling
                    </div>
                    <span className="divider-sm">|</span>
                    <div className="status-item">
-                      <span className={`dot ${data.outlook?.activities?.swimming}`}></span> Swimming
+                      <span className={`dot ${activityStatus(data.outlook?.activities, 'swimming')}`}></span> Swimming
                    </div>
                    <span className="divider-sm">|</span>
                    <div className="status-item">
-                      <span className={`dot ${data.outlook?.activities?.beach}`}></span> Beach
+                      <span className={`dot ${activityStatus(data.outlook?.activities, 'beach')}`}></span> Beach
                    </div>
                 </div>
-                <p className="activity-note">Activity dots include forecast risk (storms, wind) — separate from the hazard flag above.</p>
+                {data.outlook?.activities_summary ? (
+                  <p className="activity-note">{data.outlook.activities_summary}</p>
+                ) : (
+                  <div className="activity-reasons">
+                    {(['paddling', 'swimming', 'beach'] as const).map(key => {
+                      const reason = activityReason(data.outlook?.activities, key);
+                      if (!reason || activityStatus(data.outlook?.activities, key) === 'Green') return null;
+                      return (
+                        <p key={key} className="activity-note">
+                          <strong>{key.charAt(0).toUpperCase() + key.slice(1)}:</strong> {reason}
+                        </p>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {data.teeth && (

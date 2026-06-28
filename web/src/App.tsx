@@ -1,15 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
-import Map, { Marker, NavigationControl, Source, Layer } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { 
   Waves, Thermometer, Eye, Droplets, AlertTriangle, 
   Ship, Calendar, Search, Menu, X, LayoutDashboard, Map as MapIcon,
   Activity, Palette, Leaf, Moon, CloudSun, Navigation2,
-  TrendingUp, TrendingDown, Flag, Radar, ChevronRight
+  TrendingUp, TrendingDown, Flag, Radar, ChevronRight, Footprints
 } from 'lucide-react';
+import MapGL, { Marker, NavigationControl, Source, Layer, Popup } from 'react-map-gl/mapbox';
 import InstallPrompt from './InstallPrompt';
 import { apiFetch } from './api';
 import { useMediaQuery } from './useMediaQuery';
+import { formatFloridaTime } from './format';
 
 // --- CONFIGURATION ---
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
@@ -28,7 +29,7 @@ interface MarineData {
   surf: { height: number; period: number; intensity: string; type: string; rip_current: string; };
   weather: { temp_f: number; wind_mph: number; wind_dir: string; };
   red_tide: { status: string; };
-  mote_extras: { water: string; algae: string; algae_type: string; };
+  mote_extras: { water: string; algae: string; algae_type: string; jellyfish?: string; };
   outlook: { 
     label: string; 
     vibe: string; 
@@ -36,7 +37,7 @@ interface MarineData {
     color: string; 
     activities: { paddling: string; swimming: string; beach: string; };
   };
-  teeth: { score: number; } | null;
+  teeth: { score: number; label: string; tip: string; } | null;
   clarity: { label: string; feet: number; };
 }
 
@@ -57,7 +58,8 @@ function App() {
 
   const switchView = (mode: 'dashboard' | 'map') => {
     setViewMode(mode);
-    if (isMobile) closeSidebar();
+    if (mode === 'map') closeSidebar();
+    else if (!isMobile) setSidebarOpen(true);
   };
 
   const selectBeach = (beachId: string) => {
@@ -120,8 +122,14 @@ function App() {
 
   const lastUpdated = useMemo(() => {
     if (!data?.timestamp) return null;
-    return new Date(data.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return formatFloridaTime(data.timestamp);
   }, [data?.timestamp]);
+
+  const mapFocus = useMemo(() => {
+    const beach = beaches.find(b => b.id === selectedBeach);
+    if (beach) return { latitude: beach.lat, longitude: beach.lon, zoom: 9.2 };
+    return { latitude: 27.1, longitude: -82.4, zoom: 8.2 };
+  }, [beaches, selectedBeach]);
 
   return (
     <div className="dashboard-container">
@@ -232,8 +240,9 @@ function App() {
                <span>RADAR</span>
              </button>
 
-             <Map
-               initialViewState={{ latitude: 26.8, longitude: -82.35, zoom: 8.5 }}
+             <MapGL
+               key={selectedBeach}
+               initialViewState={mapFocus}
                style={{ width: '100%', height: '100%' }}
                mapStyle="mapbox://styles/mapbox/navigation-night-v1"
                mapboxAccessToken={MAPBOX_TOKEN}
@@ -256,18 +265,43 @@ function App() {
                )}
 
                {beaches.map(beach => (
-                 <Marker key={beach.id} latitude={beach.lat} longitude={beach.lon} anchor="bottom" onClick={e => { e.originalEvent.stopPropagation(); setSelectedBeach(beach.id); setViewMode('dashboard'); }}>
-                    <div className="map-marker-pulse">
+                 <Marker
+                   key={beach.id}
+                   latitude={beach.lat}
+                   longitude={beach.lon}
+                   anchor="bottom"
+                   onClick={e => {
+                     e.originalEvent.stopPropagation();
+                     selectBeach(beach.id);
+                   }}
+                 >
+                    <div className={`map-marker-pulse ${selectedBeach === beach.id ? 'selected' : ''}`}>
                       <div className="pulse-ring" style={{ backgroundColor: `${beach.color}44` }}></div>
                       <div className="pulse-dot" style={{ backgroundColor: beach.color }}></div>
                       <div className="marker-label-flag" style={{ backgroundColor: beach.color }}>
                          <Flag size={14} fill="#0f172a" stroke="#0f172a" />
-                         {/* <span className="label-text">{beach.name}</span> */}
                       </div>
                     </div>
                  </Marker>
                ))}
-             </Map>
+
+               {data && viewMode === 'map' && (
+                 <Popup
+                   latitude={data.lat}
+                   longitude={data.lon}
+                   anchor="top"
+                   closeButton={false}
+                   closeOnClick={false}
+                   offset={12}
+                 >
+                   <div className="map-popup">
+                     <strong>{data.beach}</strong>
+                     <span>{data.outlook?.label ?? '--'}</span>
+                     <button type="button" onClick={() => switchView('dashboard')}>View dashboard</button>
+                   </div>
+                 </Popup>
+               )}
+             </MapGL>
           </div>
         ) : loading ? (
           <div className="loading-spinner"><div className="spinner">🌊</div></div>
@@ -280,7 +314,7 @@ function App() {
                     <span className="meta-item"><Thermometer size={14} /> {data.weather?.temp_f ?? '--'}°F air</span>
                     <span className="meta-item"><Droplets size={14} /> {data.tides?.water_temp ?? '--'}°F water</span>
                     <span className="meta-item"><Navigation2 size={14} /> {data.weather?.wind_mph ?? '--'} mph {data.weather?.wind_dir ?? ''}</span>
-                    {lastUpdated && <span className="meta-item meta-muted">Updated {lastUpdated}</span>}
+                    {lastUpdated && <span className="meta-item meta-muted">Updated {lastUpdated} (Florida)</span>}
                   </div>
                   {data.tides?.water_temp_source && (
                     <p className="water-temp-source">Water temp: {data.tides.water_temp_source}</p>
@@ -310,7 +344,7 @@ function App() {
                     {lastUpdated && (
                       <>
                         <span className="divider">|</span>
-                        <span className="meta-item" style={{ opacity: 0.7 }}>Updated {lastUpdated}</span>
+                        <span className="meta-item" style={{ opacity: 0.7 }}>Updated {lastUpdated} (Florida)</span>
                       </>
                     )}
                   </div>
@@ -341,7 +375,17 @@ function App() {
                       <span className={`dot ${data.outlook?.activities?.beach}`}></span> Beach
                    </div>
                 </div>
+                <p className="activity-note">Activity dots include forecast risk (storms, wind) — separate from the hazard flag above.</p>
               </div>
+
+              {data.teeth && (
+                <div className="card teeth-card">
+                  <div className="card-title"><Footprints size={18} /> Shark Tooth Hunt</div>
+                  <div className="card-value">{data.teeth.label} <span className="teeth-score">{data.teeth.score}/10</span></div>
+                  <div className="card-subvalue reason-text">{data.teeth.tip}</div>
+                  <div className="source-label">Fossil beaches: Venice, Manasota Key, Caspersen, Nokomis, Englewood</div>
+                </div>
+              )}
 
               {/* Weather & Forecast Card */}
               <div className="card forecast-card">
@@ -353,12 +397,18 @@ function App() {
               <div className="card">
                 <div className="card-title"><Waves size={18} /> Surf</div>
                 <div className="card-value">{data.surf?.intensity ?? 'Unknown'}</div>
-                <div className="card-subvalue">{data.surf?.type ?? '--'} | {data.surf?.height ?? '--'}ft</div>
+                <div className="card-subvalue">{data.surf?.type ?? '--'} | {data.surf?.height ?? '--'}ft | {data.surf?.period ?? '--'}s period</div>
                 <div className="activity-list" style={{ marginTop: '12px' }}>
                    <div className="activity-item">
                       <AlertTriangle size={16} color={data.surf?.rip_current?.includes('High') ? '#f87171' : '#4ade80'} />
                       <div style={{ fontSize: '0.9rem' }}><strong>Rip Currents:</strong> {data.surf?.rip_current ?? '--'}</div>
                    </div>
+                   {data.mote_extras?.jellyfish && data.mote_extras.jellyfish !== 'None' && (
+                     <div className="activity-item">
+                       <AlertTriangle size={16} color="#a855f7" />
+                       <div style={{ fontSize: '0.9rem' }}><strong>Jellyfish:</strong> {data.mote_extras.jellyfish}</div>
+                     </div>
+                   )}
                 </div>
               </div>
 

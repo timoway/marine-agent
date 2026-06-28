@@ -2,6 +2,7 @@ import os
 import datetime
 import math
 import requests
+from zoneinfo import ZoneInfo
 import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional, List, Dict
@@ -17,8 +18,12 @@ from astral.moon import phase
 print("[STARTUP] marine_server.py loading...")
 
 # --- CONFIGURATION ---
+FL_TZ = ZoneInfo("America/New_York")
 OPENUV_KEY = os.environ.get("OPENUV_KEY", "")
 AGENT_API_KEY = os.environ.get("AGENT_API_KEY", "marine-secret-123")
+
+def _fl_now() -> datetime.datetime:
+    return datetime.datetime.now(FL_TZ)
 
 # --- CACHING & PERFORMANCE ---
 GLOBAL_DATA_STORE: Dict[str, dict] = {}
@@ -151,7 +156,7 @@ def _get_marine_data(config: dict):
             "&hourly=wave_height,swell_wave_period,sea_surface_temperature&timezone=auto"
         )
         r = requests.get(url, timeout=5).json()
-        h = datetime.datetime.now().hour
+        h = _fl_now().hour
         wave_ft = r['hourly']['wave_height'][h] * 3.28
         period = r['hourly']['swell_wave_period'][h]
         sst_c = r['hourly']['sea_surface_temperature'][h]
@@ -214,7 +219,7 @@ def _get_water_temp(config: dict, modeled_sst_f: Optional[float]) -> tuple[str, 
 
 def _get_tide_data(config: dict, modeled_sst_f: Optional[float] = None):
     try:
-        now = datetime.datetime.now()
+        now = _fl_now()
         begin = now.strftime("%Y%m%d")
         url = f"https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date={begin}&range=48&station={config['tide_id']}&product=predictions&datum=MLLW&time_zone=lst_ldt&interval=hilo&units=english&format=json"
         preds = requests.get(url, timeout=5).json().get('predictions', [])
@@ -266,7 +271,12 @@ def _get_skywatch():
             idx = 6
         else:
             idx = 7
-        return {"moon_phase": names[idx], "illumination": f"{round((1 - abs(p - 14)/14) * 100)}%", "planets_visible": "Venus, Mars, Jupiter", "upcoming_event": "June 9: Venus-Jupiter Conjunction"}
+        return {
+            "moon_phase": names[idx],
+            "illumination": f"{round((1 - abs(p - 14)/14) * 100)}%",
+            "planets_visible": "Check after sunset",
+            "upcoming_event": "Low moonlight improves dawn hunting on fossil beaches",
+        }
     except Exception:
         return {"moon_phase": "Unknown", "illumination": "--", "planets_visible": "Unknown", "upcoming_event": "N/A"}
 
@@ -296,6 +306,36 @@ def _get_daily_outlook(wave_ft: float, wind_mph: float, red_tide: str, mote: dic
     if wave_ft > 1.5 or wind_mph > 12:
         return {"label": "YELLOW FLAG", "vibe": "Medium Hazard", "color": "#facc15", "reason": f"Moderate surf ({wave_ft:.1f}ft). Caution recommended. {timing}"}
     return {"label": "GREEN FLAG", "vibe": "Low Hazard", "color": "#4ade80", "reason": reason}
+
+def _compute_shark_teeth_score(config: dict, wave_ft: float, tides: dict, mote: dict) -> Optional[dict]:
+    if not config.get("shark_teeth"):
+        return None
+    score = 5
+    tips: List[str] = []
+    if wave_ft < 1.0:
+        score += 2
+        tips.append("Calm surf exposes shell layers")
+    elif wave_ft < 1.5:
+        score += 1
+    elif wave_ft > 2.5:
+        score -= 2
+        tips.append("Higher surf buries fossils")
+    if tides.get("trend") == "Falling":
+        score += 2
+        tips.append("Falling tide — prime shark-tooth window")
+    elif tides.get("trend") == "Rising":
+        score -= 1
+    if mote.get("water") == "Clear Water":
+        score += 1
+    if str(mote.get("jellyfish", "None")).lower() != "none":
+        score -= 1
+    score = max(1, min(10, score))
+    label = "Excellent" if score >= 8 else "Good" if score >= 6 else "Fair" if score >= 4 else "Poor"
+    return {
+        "score": score,
+        "label": label,
+        "tip": tips[0] if tips else "Best after low tide with light surf",
+    }
 
 # --- UNIFIED CORE FUNCTION ---
 def refresh_one_beach(beach_id: str) -> dict:
@@ -342,7 +382,8 @@ def refresh_one_beach(beach_id: str) -> dict:
             "beach": config["name"],
             "lat": config["lat"],
             "lon": config["lon"],
-            "timestamp": datetime.datetime.now().isoformat(),
+            "timestamp": _fl_now().isoformat(),
+            "timezone": "America/New_York",
             "tides": tides,
             "forecast": forecast,
             "skywatch": _get_skywatch(),
@@ -361,7 +402,7 @@ def refresh_one_beach(beach_id: str) -> dict:
                 "reason": _get_daily_outlook(wave_ft, wind_mph, red_tide, mote, forecast)["reason"],
                 "activities": activities
             },
-            "teeth": {"score": 8} if config.get("shark_teeth") else None,
+            "teeth": _compute_shark_teeth_score(config, wave_ft, tides, mote),
             "clarity": {"label": "Good" if wave_ft < 1.5 else "Fair", "feet": round(max(1, 15 - (wave_ft * 4)), 0)}
         }
         GLOBAL_DATA_STORE[beach_id] = data

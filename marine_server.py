@@ -82,7 +82,10 @@ def calculate_relative_position(lat1: float, lon1: float, lat2: float, lon2: flo
     dlat, dlon = math.radians(lat1 - lat2), math.radians(lon1 - lon2)
     a = math.sin(dlat/2)**2 + math.cos(math.radians(lat2)) * math.cos(math.radians(lat1)) * math.sin(dlon/2)**2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    bearing = math.degrees(math.atan2(math.sin(dlon) * math.cos(math.radians(lat1)), math.cos(math.radians(lat2)) * math.sin(math.radians(lat2)) * math.cos(dlon)))
+    bearing = math.degrees(math.atan2(
+        math.sin(dlon) * math.cos(math.radians(lat1)),
+        math.cos(math.radians(lat2)) * math.sin(math.radians(lat1)) - math.sin(math.radians(lat2)) * math.cos(math.radians(lat1)) * math.cos(dlon),
+    ))
     cardinal = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][round(bearing / 45) % 8]
     return f"{R * c:.1f} miles {cardinal}"
 
@@ -359,7 +362,7 @@ async def data_refresher_loop():
             print(f"[{datetime.datetime.now()}] Starting full beach sync...")
             for beach_id in BEACH_CONFIG:
                 try:
-                    refresh_one_beach(beach_id)
+                    await asyncio.to_thread(refresh_one_beach, beach_id)
                 except Exception as e:
                     print(f"[WARN] refresh {beach_id} failed (non-fatal): {str(e)[:80]}")
             await asyncio.sleep(300)
@@ -421,7 +424,16 @@ async def list_beaches_with_flags():
 async def get_beach_conditions_api(beach_id: str):
     if beach_id in GLOBAL_DATA_STORE:
         return GLOBAL_DATA_STORE[beach_id]
-    return refresh_one_beach(beach_id)
+    return await asyncio.to_thread(refresh_one_beach, beach_id)
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "ok",
+        "beaches_cached": len(GLOBAL_DATA_STORE),
+        "beaches_total": len(BEACH_CONFIG),
+        "mcp_endpoint": "/mcp/sse",
+    }
 
 print("[STARTUP] FastAPI app created and ready - all beach data sources integrated")
 

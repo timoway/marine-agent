@@ -220,9 +220,26 @@ function App() {
           <div className="loading-spinner"><div className="spinner">🌊</div></div>
         ) : data ? (
           <>
+            <div className="header mobile-header">
+              <div className="header-row">
+                <div className="header-main">
+                  <h1 className="beach-name">{data.beach}</h1>
+                  <div className="beach-meta beach-meta-compact">
+                    <span className="meta-item"><Thermometer size={14} /> {data.weather?.temp_f ?? '--'}°F air</span>
+                    <span className="meta-item"><Droplets size={14} /> {data.tides?.water_temp ?? '--'}°F water</span>
+                    <span className="meta-item"><Navigation2 size={14} /> {data.weather?.wind_mph ?? '--'} mph {data.weather?.wind_dir ?? ''}</span>
+                    {lastUpdated && <span className="meta-item meta-muted">Updated {lastUpdated}</span>}
+                  </div>
+                </div>
+                <div className="glass-flag" style={{ borderColor: data.outlook?.color }}>
+                  <Flag size={20} color={data.outlook?.color} fill={data.outlook?.color} />
+                </div>
+              </div>
+            </div>
+
             <div className="header desktop-only">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
-                <div>
+              <div className="header-row">
+                <div className="header-main">
                   <h1 className="beach-name">{data.beach}</h1>
                   <div className="beach-meta">
                     <span className="meta-item"><Thermometer size={16} /> Air: {data.weather?.temp_f ?? '--'}°F</span>
@@ -243,7 +260,6 @@ function App() {
                     )}
                   </div>
                 </div>
-                {/* GLASSY FLAG ICON */}
                 <div className="glass-flag" style={{ borderColor: data.outlook?.color }}>
                    <Flag size={20} color={data.outlook?.color} fill={data.outlook?.color} />
                 </div>
@@ -273,9 +289,9 @@ function App() {
               </div>
 
               {/* Weather & Forecast Card */}
-              <div className="card" style={{ gridColumn: 'span 2' }}>
+              <div className="card forecast-card">
                 <div className="card-title"><CloudSun size={18} /> Detailed Forecast</div>
-                <div className="card-value" style={{ fontSize: '1.1rem', lineHeight: '1.6' }}>{data.forecast?.summary ?? '--'}</div>
+                <div className="card-value forecast-text">{data.forecast?.summary ?? '--'}</div>
                 <div className="source-label">Source: {data.forecast?.source ?? 'NWS'}</div>
               </div>
 

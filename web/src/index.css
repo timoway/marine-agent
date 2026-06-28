@@ -4,17 +4,26 @@
   color: #f8fafc;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   height: 100vh;
-  width: 100vw;
-  overflow: hidden; /* Prevent body scroll, lock to layout */
+  height: 100dvh;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-text-size-adjust: 100%;
 }
 
 .dashboard-container {
   display: flex;
   height: 100vh;
-  width: 100vw;
+  height: 100dvh;
+  width: 100%;
+  max-width: 100%;
   overflow: hidden;
 }
 
@@ -138,13 +147,18 @@ body {
 /* MAIN CONTENT */
 .main-content {
   flex: 1;
+  min-width: 0;
   height: 100vh;
-  overflow-y: auto; /* SCROLLING AREA */
+  height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 40px;
   background: radial-gradient(circle at top right, #1e293b, #0f172a);
   position: relative;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
 }
 
 .floating-menu-btn {
@@ -272,10 +286,18 @@ body {
 /* ACTIVITY STATUS LINE */
 .activity-status-line {
   display: flex;
-  gap: 20px;
+  flex-wrap: wrap;
+  gap: 12px 16px;
   margin-top: 20px;
   padding-top: 20px;
   border-top: 1px solid #334155;
+}
+
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  word-break: break-word;
 }
 
 .status-item {
@@ -299,11 +321,38 @@ body {
 
 .divider-sm { color: #334155; }
 
-.header { margin-bottom: 32px; }
-.beach-name { font-size: 2.5rem; margin: 0; }
-.beach-meta { display: flex; align-items: center; gap: 12px; color: #94a3b8; margin-top: 8px; flex-wrap: wrap; }
+.header { margin-bottom: 24px; }
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.header-main { min-width: 0; flex: 1; }
+.beach-name {
+  font-size: 2.5rem;
+  margin: 0;
+  line-height: 1.1;
+  word-break: break-word;
+}
+.beach-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  color: #94a3b8;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.beach-meta-compact {
+  font-size: 0.85rem;
+  gap: 6px 10px;
+}
 .meta-item { display: flex; align-items: center; gap: 6px; }
+.meta-muted { opacity: 0.75; }
 .divider { color: #334155; }
+
+.desktop-only { display: block; }
+.mobile-header { display: none; }
 
 .outlook-badge {
   padding: 8px 24px;
@@ -316,9 +365,12 @@ body {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 24px;
-  padding-bottom: 80px; /* ENSURE BOTTOM CARD VISIBILITY */
+  grid-template-columns: 1fr;
+  gap: 16px;
+  width: 100%;
+  max-width: 100%;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
 }
 
 .card {
@@ -328,9 +380,22 @@ body {
   padding: 24px;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
-.hero-card { grid-column: 1 / -1; }
+.hero-card,
+.forecast-card {
+  grid-column: 1 / -1;
+}
+
+.forecast-text {
+  font-size: 1.05rem;
+  line-height: 1.55;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 
 .card-title {
   display: flex;
@@ -384,13 +449,30 @@ body {
   padding: 40px;
 }
 
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+  }
+}
+
 @media (max-width: 1024px) {
+  .desktop-only { display: none; }
+  .mobile-header { display: block; }
+
   .sidebar {
     position: fixed;
     left: 0;
     top: 0;
     transform: translateX(-100%);
-    width: 320px;
+    width: min(320px, 88vw);
   }
   .sidebar.open { transform: translateX(0); }
   .menu-close-mobile { display: block; }
@@ -401,9 +483,28 @@ body {
     backdrop-filter: blur(4px);
     z-index: 2900;
   }
-  .main-content { padding: 24px; padding-top: 80px; }
-  .beach-name { font-size: 1.8rem; }
-  .hero-value { font-size: 2rem; }
+  .main-content {
+    padding: 16px;
+    padding-top: 72px;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  }
+  .beach-name { font-size: 1.5rem; }
+  .hero-value { font-size: 1.75rem; }
+  .card { padding: 18px; border-radius: 16px; }
+  .card-value { font-size: 1.5rem; }
+  .reason-text { font-size: 0.95rem; }
+  .floating-menu-btn {
+    top: max(12px, env(safe-area-inset-top, 12px));
+    left: 12px;
+    width: 44px;
+    height: 44px;
+  }
+  .glass-flag {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+  .divider { display: none; }
 }
 
 .loading-spinner { display: flex; justify-content: center; align-items: center; min-height: 400px; }
@@ -412,10 +513,11 @@ body {
 
 .install-prompt {
   position: fixed;
-  bottom: 16px;
-  left: 16px;
-  right: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom, 16px));
+  left: 12px;
+  right: 12px;
   z-index: 4000;
+  max-width: calc(100% - 24px);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -430,11 +532,12 @@ body {
 
 .install-prompt-content {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   line-height: 1.35;
   color: #e2e8f0;
+  min-width: 0;
 }
 
 .install-prompt-close {

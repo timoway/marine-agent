@@ -8,12 +8,10 @@ import {
   TrendingUp, TrendingDown, Flag, Radar
 } from 'lucide-react';
 import InstallPrompt from './InstallPrompt';
+import { apiFetch } from './api';
 
 // --- CONFIGURATION ---
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
-const API_BASE = import.meta.env.VITE_API_BASE || (
-  import.meta.env.PROD ? '/api' : `http://${window.location.hostname}:8000/api`
-);
 const REFRESH_MS = 5 * 60 * 1000; // match backend sync interval
 
 interface Beach { id: string; name: string; lat: number; lon: number; color?: string; }
@@ -54,8 +52,7 @@ function App() {
 
   useEffect(() => {
     const fetchBeaches = () => {
-      fetch(`${API_BASE}/beaches_with_flags`)
-        .then(res => res.json())
+      apiFetch<Beach[]>('/beaches_with_flags')
         .then(setBeaches)
         .catch(err => console.error(err));
     };
@@ -72,11 +69,10 @@ function App() {
         setLoading(true);
         setError(null);
       }
-      fetch(`${API_BASE}/conditions/${selectedBeach}`)
-        .then(res => res.json())
+      apiFetch<MarineData>(`/conditions/${selectedBeach}`)
         .then(json => {
           if (cancelled) return;
-          if (json.error) throw new Error(json.error);
+          if ('error' in json && json.error) throw new Error(String(json.error));
           setData(json);
           setLoading(false);
           if (showLoading && window.innerWidth <= 1024) setSidebarOpen(false);
@@ -84,7 +80,7 @@ function App() {
         .catch(err => {
           if (cancelled) return;
           if (showLoading) {
-            setError(err.message);
+            setError(err instanceof Error ? err.message : 'Failed to load beach data');
             setLoading(false);
           }
         });
@@ -164,9 +160,12 @@ function App() {
         {error ? (
           <div className="error-container">
             <AlertTriangle size={48} color="#f87171" />
-            <h2>Dashboard Error</h2>
+            <h2>Can't Load Beach Data</h2>
             <p>{error}</p>
-            <button onClick={() => window.location.reload()} className="toggle-btn active" style={{ marginTop: '20px' }}>Retry</button>
+            <p style={{ opacity: 0.75, fontSize: '0.9rem', maxWidth: '420px', textAlign: 'center' }}>
+              Production needs the Render API at <code>marine-agent-api.onrender.com</code>. First deploy may take 1–2 minutes to wake up.
+            </p>
+            <button onClick={() => window.location.reload()} className="retry-btn">Retry</button>
           </div>
         ) : viewMode === 'map' ? (
           <div className="map-container-fixed" style={{ position: 'relative' }}>

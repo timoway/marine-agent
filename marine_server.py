@@ -1,13 +1,15 @@
 import os
 import datetime
 import math
+from io import BytesIO
 import requests
 from zoneinfo import ZoneInfo
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 from functools import lru_cache
 from cachetools import TTLCache, cached
+from PIL import Image
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
@@ -114,6 +116,87 @@ ACTIVITY_RANK = {"Green": 0, "Yellow": 1, "Red": 2}
 VALID_ACTIVITIES = frozenset({"paddling", "swimming", "beach"})
 VERDICT_COLORS = {"Green": "#4ade80", "Yellow": "#facc15", "Red": "#f87171"}
 LIKELIHOOD_RANK = {"none": 0, "chance": 1, "likely": 2, "active": 3, "severe": 4}
+
+RADAR_TILE_URL = "https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png"
+RADAR_ZOOM = 8
+RADAR_SAMPLE_RADIUS_MI = 12
+RADAR_DBZ_MODERATE = 30
+RADAR_DBZ_HEAVY = 40
+_RADAR_TILE_CACHE: TTLCache = TTLCache(maxsize=96, ttl=90)
+
+N0Q_DBZ_COLORS: List[Tuple[Tuple[int, int, int], int]] = [
+    ((4, 233, 231), 5), ((1, 159, 244), 10), ((0, 219, 0), 15), ((0, 143, 0), 20),
+    ((255, 255, 0), 25), ((231, 192, 0), 30), ((255, 144, 0), 35), ((255, 0, 0), 40),
+    ((214, 0, 0), 45), ((192, 0, 0), 50), ((255, 0, 255), 55), ((153, 85, 201), 60),
+    ((255, 255, 255), 65), ((179, 179, 179), 70),
+]
+
+def _lat_lon_to_tile_xy(lat: float, lon: float, zoom: int) -> Tuple[int, int, float, float]:
+    n = 2 ** zoom
+    x_frac = (lon + 180.0) / 360.0 * n
+    lat_rad = math.radians(lat)
+    y_frac = (1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n
+    return int(x_frac), int(y_frac), x_frac, y_frac
+
+def _fetch_radar_tile(z: int, x: int, y: int) -> Optional[Image.Image]:
+    key = (z, x, y)
+    if key in _RADAR_TILE_CACHE:
+        return _RADAR_TILE_CACHE[key]
+    try:
+        url = RADAR_TILE_URL.format(z=z, x=x, y=y)
+        resp = requests.get(url, timeout=4)
+        if not resp.ok:
+            return None
+        img = Image.open(BytesIO(resp.content)).convert("RGBA")
+        _RADAR_TILE_CACHE[key] = img
+        return img
+    except Exception:
+        return None
+
+def _rgb_to_dbz(r: int, g: int, b: int, a: int) -> int:
+    if a < 48 or (r + g + b) < 36:
+        return 0
+    best_dbz = 0
+    best_dist = float("inf")
+    for (cr, cg, cb), dbz in N0Q_DBZ_COLORS:
+        dist = (r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2
+        if dist < best_dist:
+            best_dist = dist
+            best_dbz = dbz
+    return best_dbz if best_dist <= 9000 else 0
+
+def _sample_dbz_at(lat: float, lon: float, zoom: int = RADAR_ZOOM) -> int:
+    tile_x, tile_y, x_frac, y_frac = _lat_lon_to_tile_xy(lat, lon, zoom)
+    img = _fetch_radar_tile(zoom, tile_x, tile_y)
+    if img is None:
+        return 0
+    px = min(255, max(0, int((x_frac - tile_x) * 256)))
+    py = min(255, max(0, int((y_frac - tile_y) * 256)))
+    r, g, b, a = img.getpixel((px, py))
+    return _rgb_to_dbz(r, g, b, a)
+
+def _get_radar_proximity(lat: float, lon: float) -> dict:
+    """Sample NWS NEXRAD mosaic near a beach. Complements point-based NWS alerts."""
+    max_dbz = 0
+    lat_deg_mi = 1.0 / 69.0
+    lon_deg_mi = 1.0 / (69.0 * max(0.2, math.cos(math.radians(lat))))
+    steps = (-1, 0, 1)
+    for dlat in steps:
+        for dlon in steps:
+            sample_lat = lat + dlat * RADAR_SAMPLE_RADIUS_MI * lat_deg_mi
+            sample_lon = lon + dlon * RADAR_SAMPLE_RADIUS_MI * lon_deg_mi
+            max_dbz = max(max_dbz, _sample_dbz_at(sample_lat, sample_lon))
+    level = "none"
+    if max_dbz >= RADAR_DBZ_HEAVY:
+        level = "heavy"
+    elif max_dbz >= RADAR_DBZ_MODERATE:
+        level = "moderate"
+    return {
+        "max_dbz": max_dbz,
+        "level": level,
+        "storm_nearby": level in ("moderate", "heavy"),
+        "radius_miles": RADAR_SAMPLE_RADIUS_MI,
+    }
 
 def _max_status(*statuses: str) -> str:
     return max(statuses, key=lambda s: ACTIVITY_RANK.get(s, 2))
@@ -296,6 +379,13 @@ def _analyze_weather_situation(forecast: dict) -> dict:
     elif hourly["max_pop"] >= 50:
         now_likelihood = _max_likelihood(now_likelihood, "chance")
 
+    radar_proximity = forecast.get("radar_proximity", {})
+    if radar_proximity.get("storm_nearby") and advisory_level == "none":
+        if radar_proximity.get("level") == "heavy":
+            now_likelihood = _max_likelihood(now_likelihood, "likely")
+        elif radar_proximity.get("level") == "moderate":
+            now_likelihood = _max_likelihood(now_likelihood, "chance")
+
     return {
         "hour": hour,
         "advisory_level": advisory_level,
@@ -307,7 +397,19 @@ def _analyze_weather_situation(forecast: dict) -> dict:
         "hourly_max_pop": hourly.get("max_pop", 0),
         "current_period": periods[0].get("name", "") if periods else "",
         "active_alerts": active_alerts,
+        "radar_proximity": radar_proximity,
     }
+
+def _radar_plan_reason(situation: dict) -> Optional[str]:
+    radar = situation.get("radar_proximity", {})
+    if not radar.get("storm_nearby") or situation.get("advisory_level") != "none":
+        return None
+    dbz = radar.get("max_dbz", 0)
+    if radar.get("level") == "heavy":
+        return f"Heavy precipitation on radar nearby ({dbz} dBZ)"
+    if radar.get("level") == "moderate":
+        return f"Precipitation detected on radar nearby ({dbz} dBZ)"
+    return None
 
 def _forecast_plan_status(situation: dict) -> tuple[str, str]:
     advisory = situation["advisory_level"]
@@ -315,6 +417,10 @@ def _forecast_plan_status(situation: dict) -> tuple[str, str]:
         return "Red", situation["advisory_reason"] or "Active weather advisory"
     if advisory == "likely":
         return "Red", situation["advisory_reason"] or "Tropical weather threat"
+
+    radar_reason = _radar_plan_reason(situation)
+    if radar_reason:
+        return "Yellow", radar_reason
 
     now_lvl = situation["now_likelihood"]
     later_lvl = situation["later_likelihood"]
@@ -366,6 +472,10 @@ def _forecast_activity_status(activity: str, situation: dict) -> tuple[str, str]
     advisory = situation["advisory_level"]
     if advisory in ("severe", "active", "likely"):
         return "Red", situation["advisory_reason"] or "Weather advisory in effect"
+
+    radar_reason = _radar_plan_reason(situation)
+    if radar_reason:
+        return "Yellow", radar_reason
 
     now_lvl = situation["now_likelihood"]
     later_lvl = situation["later_likelihood"]
@@ -481,6 +591,8 @@ def _build_outlook(flag: dict, wave_ft: float, wind_mph: float, red_tide: str, m
         "activities": activities,
         "activities_summary": _activities_summary(activities),
         "storm_badge": len(situation.get("active_alerts", [])) > 0,
+        "radar_nearby": situation.get("radar_proximity", {}).get("storm_nearby", False),
+        "radar_proximity": situation.get("radar_proximity", {}),
         "active_alerts": situation.get("active_alerts", []),
     }
 
@@ -938,6 +1050,7 @@ def refresh_one_beach(beach_id: str) -> dict:
         mote = _get_mote_report(config)
         red_tide = _get_red_tide_status(config)
         forecast = _get_nws_forecast(config)
+        forecast["radar_proximity"] = _get_radar_proximity(config["lat"], config["lon"])
         tides = _get_tide_data(config, modeled_sst_f=sst_f)
         
         flag = calculate_flag(wave_ft, wind_mph, red_tide, mote["jellyfish"].lower() != "none")
@@ -1063,6 +1176,7 @@ async def list_beaches_with_flags(max_age: int = 0):
             "lon": v["lon"],
             "color": outlook.get("color", "#4ade80"),
             "storm_badge": outlook.get("storm_badge", False),
+            "radar_nearby": outlook.get("radar_nearby", False),
         })
     return res
 

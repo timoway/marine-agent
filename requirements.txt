@@ -5,6 +5,7 @@ astral
 beautifulsoup4
 cachetools
 requests
+Pillow
 python-dotenv
 python-multipart
 pydantic

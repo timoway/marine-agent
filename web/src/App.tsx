@@ -17,7 +17,7 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
 const REFRESH_MS = 5 * 60 * 1000; // match backend sync interval
 const RADAR_REFRESH_MS = 60 * 1000;
 
-interface Beach { id: string; name: string; lat: number; lon: number; color?: string; storm_badge?: boolean; }
+interface Beach { id: string; name: string; lat: number; lon: number; color?: string; storm_badge?: boolean; radar_nearby?: boolean; }
 
 type RankActivity = 'paddling' | 'swimming' | 'beach';
 
@@ -95,6 +95,8 @@ interface MarineData {
     };
     activities_summary?: string | null;
     storm_badge?: boolean;
+    radar_nearby?: boolean;
+    radar_proximity?: { max_dbz: number; level: string; storm_nearby: boolean; radius_miles: number; };
     active_alerts?: { event: string; headline: string; severity?: string; }[];
   };
   teeth: { score: number; label: string; tip: string; } | null;
@@ -432,7 +434,7 @@ function App() {
                      selectBeach(beach.id);
                    }}
                  >
-                    <div className={`map-marker-pulse ${selectedBeach === beach.id ? 'selected' : ''}`}>
+                    <div className={`map-marker-pulse ${selectedBeach === beach.id ? 'selected' : ''} ${beach.radar_nearby && !beach.storm_badge ? 'radar-nearby' : ''}`}>
                       {mapZoom >= 9 && (
                         <div className="marker-name-label">{beach.name}</div>
                       )}
@@ -529,6 +531,11 @@ function App() {
                     )}
                     {data.outlook?.plan_today?.hourly && (
                       <span className="outlook-panel-note">Next hours: {data.outlook.plan_today.hourly}</span>
+                    )}
+                    {data.outlook?.radar_proximity?.storm_nearby && (
+                      <span className="outlook-panel-note">
+                        Radar: {data.outlook.radar_proximity.max_dbz} dBZ within {data.outlook.radar_proximity.radius_miles} mi
+                      </span>
                     )}
                   </div>
                 </div>

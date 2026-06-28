@@ -330,7 +330,15 @@ body {
   overflow: hidden;
   border: 1px solid #334155;
   min-height: calc(100vh - 80px);
+  min-height: calc(100dvh - 80px);
   position: relative;
+}
+
+@media (max-width: 1024px) {
+  .map-container-fixed {
+    min-height: calc(100dvh - 120px);
+    border-radius: 16px;
+  }
 }
 
 .radar-toggle {
@@ -420,6 +428,49 @@ body {
   justify-content: center;
   box-shadow: 0 4px 12px rgba(0,0,0,0.5);
   border: 1px solid rgba(255,255,255,0.2);
+}
+
+.map-marker-pulse.selected .pulse-dot {
+  width: 12px;
+  height: 12px;
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.85);
+}
+
+.map-popup {
+  color: #0f172a;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 140px;
+}
+
+.map-popup button {
+  margin-top: 4px;
+  border: none;
+  border-radius: 8px;
+  background: #3b82f6;
+  color: white;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.activity-note {
+  margin: 14px 0 0;
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.teeth-card {
+  border-left: 4px solid #f59e0b;
+}
+
+.teeth-score {
+  font-size: 1.1rem;
+  color: #fbbf24;
+  margin-left: 8px;
 }
 
 @keyframes map-pulse {

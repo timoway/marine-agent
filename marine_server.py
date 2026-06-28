@@ -82,17 +82,22 @@ BEACH_CONFIG = {
 }
 
 # --- HELPERS ---
-def calculate_relative_position(lat1: float, lon1: float, lat2: float, lon2: float) -> str:
+def distance_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     R = 3958.8
     dlat, dlon = math.radians(lat1 - lat2), math.radians(lon1 - lon2)
     a = math.sin(dlat/2)**2 + math.cos(math.radians(lat2)) * math.cos(math.radians(lat1)) * math.sin(dlon/2)**2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return R * c
+
+def calculate_relative_position(lat1: float, lon1: float, lat2: float, lon2: float) -> str:
+    d = distance_miles(lat1, lon1, lat2, lon2)
+    dlat, dlon = math.radians(lat1 - lat2), math.radians(lon1 - lon2)
     bearing = math.degrees(math.atan2(
         math.sin(dlon) * math.cos(math.radians(lat1)),
         math.cos(math.radians(lat2)) * math.sin(math.radians(lat1)) - math.sin(math.radians(lat2)) * math.cos(math.radians(lat1)) * math.cos(dlon),
     ))
     cardinal = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][round(bearing / 45) % 8]
-    return f"{R * c:.1f} miles {cardinal}"
+    return f"{d:.1f} miles {cardinal}"
 
 def calculate_flag(wave_ft: float, wind_mph: float, red_tide_status: str, jellyfish_detected: bool) -> dict:
     if red_tide_status == "Medium/High" or wave_ft > 6.0:
@@ -104,6 +109,150 @@ def calculate_flag(wave_ft: float, wind_mph: float, red_tide_status: str, jellyf
     if wave_ft > 1.5 or wind_mph > 12:
         return {"label": "YELLOW FLAG", "vibe": "Medium Hazard", "color": "#facc15"}
     return {"label": "GREEN FLAG", "vibe": "Low Hazard", "color": "#4ade80"}
+
+ACTIVITY_RANK = {"Green": 0, "Yellow": 1, "Red": 2}
+VALID_ACTIVITIES = frozenset(ACTIVITY_RANK)
+
+def _has_red_tide(data: dict) -> bool:
+    return data.get("red_tide", {}).get("status", "Not Present") != "Not Present"
+
+def _has_purple_hazard(data: dict) -> bool:
+    outlook = data.get("outlook", {})
+    if outlook.get("label") == "PURPLE FLAG":
+        return True
+    jellyfish = str(data.get("mote_extras", {}).get("jellyfish", "None")).lower()
+    return jellyfish not in ("none", "n/a", "")
+
+def _rank_tier(data: dict) -> str:
+    if _has_red_tide(data):
+        return "avoid"
+    if _has_purple_hazard(data):
+        return "caution"
+    return "best"
+
+def _rank_sort_key(data: dict, activity: str) -> tuple:
+    """Lower tuple = better rank. Red tide always sinks to avoid tier; purple near bottom."""
+    tier = 2 if _has_red_tide(data) else 1 if _has_purple_hazard(data) else 0
+    activity_status = data.get("outlook", {}).get("activities", {}).get(activity, "Red")
+    activity_score = ACTIVITY_RANK.get(activity_status, 2)
+    wind = data.get("weather", {}).get("wind_mph", 99)
+    surf = data.get("surf", {}).get("height", 99)
+    red_tide_penalty = 1 if _has_red_tide(data) else 0
+    purple_penalty = 1 if _has_purple_hazard(data) else 0
+    return (tier, activity_score, wind, surf, red_tide_penalty, purple_penalty)
+
+def _rank_summary(data: dict, activity: str) -> str:
+    parts = [
+        f"{activity.title()}: {data.get('outlook', {}).get('activities', {}).get(activity, 'Unknown')}",
+        f"{data.get('weather', {}).get('wind_mph', '--')} mph wind",
+        f"{data.get('surf', {}).get('height', '--')} ft surf",
+    ]
+    red_tide = data.get("red_tide", {}).get("status", "Not Present")
+    if red_tide != "Not Present":
+        parts.append(f"red tide ({red_tide})")
+    if _has_purple_hazard(data):
+        parts.append("purple flag / stinging life")
+    return "; ".join(parts)
+
+DEFAULT_NEARBY_RADIUS_MILES = 50
+FALLBACK_NEARBY_RADIUS_MILES = 75
+
+def _resolve_rank_anchor(
+    beach_id: Optional[str] = None,
+    near_lat: Optional[float] = None,
+    near_lon: Optional[float] = None,
+) -> Optional[dict]:
+    if beach_id and beach_id in BEACH_CONFIG:
+        config = BEACH_CONFIG[beach_id]
+        return {
+            "beach_id": beach_id,
+            "name": config["name"],
+            "lat": config["lat"],
+            "lon": config["lon"],
+        }
+    if near_lat is not None and near_lon is not None:
+        return {"beach_id": None, "name": "Custom location", "lat": near_lat, "lon": near_lon}
+    return None
+
+def rank_beaches_data(
+    activity: str = "paddling",
+    limit: int = 5,
+    beach_id: Optional[str] = None,
+    near_lat: Optional[float] = None,
+    near_lon: Optional[float] = None,
+    radius_miles: Optional[float] = None,
+) -> dict:
+    activity = activity if activity in VALID_ACTIVITIES else "paddling"
+    limit = max(1, min(limit, len(BEACH_CONFIG)))
+    anchor = _resolve_rank_anchor(beach_id=beach_id, near_lat=near_lat, near_lon=near_lon)
+    use_nearby = anchor is not None
+    requested_radius = radius_miles if radius_miles is not None else DEFAULT_NEARBY_RADIUS_MILES
+    active_radius = requested_radius if use_nearby else None
+    radius_expanded = False
+
+    candidates = []
+    for candidate_id, config in BEACH_CONFIG.items():
+        data = GLOBAL_DATA_STORE.get(candidate_id)
+        if not data or data.get("error"):
+            continue
+        dist = None
+        if use_nearby:
+            dist = distance_miles(anchor["lat"], anchor["lon"], config["lat"], config["lon"])
+            if dist > (active_radius or requested_radius):
+                continue
+        candidates.append((candidate_id, config, data, dist))
+
+    if use_nearby and not candidates and requested_radius < FALLBACK_NEARBY_RADIUS_MILES:
+        active_radius = FALLBACK_NEARBY_RADIUS_MILES
+        radius_expanded = True
+        for candidate_id, config in BEACH_CONFIG.items():
+            data = GLOBAL_DATA_STORE.get(candidate_id)
+            if not data or data.get("error"):
+                continue
+            dist = distance_miles(anchor["lat"], anchor["lon"], config["lat"], config["lon"])
+            if dist <= active_radius:
+                candidates.append((candidate_id, config, data, dist))
+
+    candidates.sort(key=lambda item: _rank_sort_key(item[2], activity))
+    results = []
+    for idx, (candidate_id, config, data, dist) in enumerate(candidates[:limit], start=1):
+        entry = {
+            "rank": idx,
+            "beach_id": candidate_id,
+            "name": config["name"],
+            "rank_tier": _rank_tier(data),
+            "activity_status": data.get("outlook", {}).get("activities", {}).get(activity, "Unknown"),
+            "flag": data.get("outlook", {}).get("label", "UNKNOWN"),
+            "wind_mph": data.get("weather", {}).get("wind_mph"),
+            "surf_ft": data.get("surf", {}).get("height"),
+            "red_tide": data.get("red_tide", {}).get("status", "Not Present"),
+            "jellyfish": data.get("mote_extras", {}).get("jellyfish", "None"),
+            "summary": _rank_summary(data, activity),
+        }
+        if dist is not None:
+            entry["distance_miles"] = round(dist, 1)
+        results.append(entry)
+
+    response = {
+        "activity": activity,
+        "when": "today",
+        "generated_at": _fl_now().isoformat(),
+        "timezone": "America/New_York",
+        "total_beaches": len(BEACH_CONFIG),
+        "candidate_count": len(candidates),
+        "ranked_count": len(results),
+        "results": results,
+    }
+    if use_nearby and anchor:
+        response["nearby"] = {
+            "anchor_beach_id": anchor["beach_id"],
+            "anchor_name": anchor["name"],
+            "lat": anchor["lat"],
+            "lon": anchor["lon"],
+            "radius_miles": active_radius or requested_radius,
+            "radius_expanded": radius_expanded,
+        }
+    return response
 
 def get_beach_key(beach_name: str) -> Optional[str]:
     if not beach_name:
@@ -448,7 +597,7 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
 @app.api_route("/", methods=["GET", "HEAD"])
 def root():
-    return {"status": "MarineAgent Live", "mcp_endpoint": "/mcp", "api_endpoints": ["/api/beaches_with_flags", "/api/conditions/{beach_id}"]}
+    return {"status": "MarineAgent Live", "mcp_endpoint": "/mcp", "api_endpoints": ["/api/beaches_with_flags", "/api/conditions/{beach_id}", "/api/rank"]}
 
 app.mount("/mcp", sse_app)
 
@@ -460,6 +609,11 @@ def get_beach_conditions(beach: str = "venice") -> dict:
     if not beach_id or beach_id not in BEACH_CONFIG:
         beach_id = "venice"
     return refresh_one_beach(beach_id)
+
+@mcp.tool()
+def rank_beaches(activity: str = "paddling", limit: int = 5, beach_id: str = "venice", radius_miles: int = 50) -> dict:
+    """Rank beaches for an activity near an anchor beach (default 50mi). Red tide beaches are fully deranked; purple flag / jellyfish heavily penalized."""
+    return rank_beaches_data(activity=activity, limit=limit, beach_id=beach_id, radius_miles=radius_miles)
 
 # --- API ROUTES FOR FRONTEND DASHBOARD ---
 @app.get("/api/beaches_with_flags")
@@ -482,6 +636,39 @@ async def get_beach_conditions_api(beach_id: str):
     if beach_id in GLOBAL_DATA_STORE:
         return GLOBAL_DATA_STORE[beach_id]
     return await asyncio.to_thread(refresh_one_beach, beach_id)
+
+@app.get("/api/rank")
+async def rank_beaches_api(
+    activity: str = "paddling",
+    when: str = "today",
+    coast: str = "all",
+    limit: int = 5,
+    beach_id: Optional[str] = None,
+    near_lat: Optional[float] = None,
+    near_lon: Optional[float] = None,
+    radius_miles: Optional[float] = None,
+):
+    if when != "today":
+        raise HTTPException(status_code=400, detail="Only when=today is supported right now")
+    if activity not in VALID_ACTIVITIES:
+        raise HTTPException(status_code=400, detail=f"activity must be one of: {', '.join(sorted(VALID_ACTIVITIES))}")
+    if beach_id and beach_id not in BEACH_CONFIG:
+        raise HTTPException(status_code=400, detail=f"Unknown beach_id: {beach_id}")
+    if (near_lat is None) ^ (near_lon is None):
+        raise HTTPException(status_code=400, detail="near_lat and near_lon must be provided together")
+    if radius_miles is not None and radius_miles <= 0:
+        raise HTTPException(status_code=400, detail="radius_miles must be positive")
+    if not GLOBAL_DATA_STORE:
+        for bid in BEACH_CONFIG:
+            await asyncio.to_thread(refresh_one_beach, bid)
+    return rank_beaches_data(
+        activity=activity,
+        limit=limit,
+        beach_id=beach_id,
+        near_lat=near_lat,
+        near_lon=near_lon,
+        radius_miles=radius_miles,
+    )
 
 @app.get("/health")
 async def health():

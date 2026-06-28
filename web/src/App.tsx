@@ -4,7 +4,7 @@ import {
   Waves, Thermometer, Eye, Droplets, AlertTriangle, 
   Ship, Calendar, Search, Menu, X, LayoutDashboard, Map as MapIcon,
   Activity, Palette, Leaf, Moon, CloudSun, Navigation2,
-  TrendingUp, TrendingDown, Flag, Radar, ChevronRight, Footprints
+  TrendingUp, TrendingDown, Flag, Radar, ChevronRight, Footprints, Zap
 } from 'lucide-react';
 import MapGL, { Marker, NavigationControl, Source, Layer } from 'react-map-gl/mapbox';
 import InstallPrompt from './InstallPrompt';
@@ -15,8 +15,9 @@ import { formatFloridaTime } from './format';
 // --- CONFIGURATION ---
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
 const REFRESH_MS = 5 * 60 * 1000; // match backend sync interval
+const RADAR_REFRESH_MS = 60 * 1000;
 
-interface Beach { id: string; name: string; lat: number; lon: number; color?: string; }
+interface Beach { id: string; name: string; lat: number; lon: number; color?: string; storm_badge?: boolean; }
 
 type RankActivity = 'paddling' | 'swimming' | 'beach';
 
@@ -85,7 +86,7 @@ interface MarineData {
     reason: string; 
     color: string;
     water_now?: { label: string; vibe: string; color: string; summary: string; };
-    plan_today?: { status: string; color: string; headline: string; forecast: string; };
+    plan_today?: { status: string; color: string; headline: string; forecast: string; hourly?: string; };
     verdict?: { headline: string; status: string; color: string; reason: string; };
     activities: {
       paddling: { status: string; reason: string; } | string;
@@ -93,6 +94,8 @@ interface MarineData {
       beach: { status: string; reason: string; } | string;
     };
     activities_summary?: string | null;
+    storm_badge?: boolean;
+    active_alerts?: { event: string; headline: string; severity?: string; }[];
   };
   teeth: { score: number; label: string; tip: string; } | null;
   clarity: { label: string; feet: number; };
@@ -134,16 +137,19 @@ function App() {
     setSidebarOpen(!isMobile);
   }, [isMobile]);
 
+  const refreshMs = showRadar ? RADAR_REFRESH_MS : REFRESH_MS;
+  const maxAgeParam = showRadar ? '&max_age=60' : '';
+
   useEffect(() => {
     const fetchBeaches = () => {
-      apiFetch<Beach[]>('/beaches_with_flags')
+      apiFetch<Beach[]>(`/beaches_with_flags${showRadar ? '?max_age=60' : ''}`)
         .then(setBeaches)
         .catch(err => console.error(err));
     };
     fetchBeaches();
-    const interval = setInterval(fetchBeaches, REFRESH_MS);
+    const interval = setInterval(fetchBeaches, refreshMs);
     return () => clearInterval(interval);
-  }, []);
+  }, [showRadar, refreshMs]);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,7 +159,7 @@ function App() {
         setLoading(true);
         setError(null);
       }
-      apiFetch<MarineData>(`/conditions/${selectedBeach}`)
+      apiFetch<MarineData>(`/conditions/${selectedBeach}${maxAgeParam ? `?${maxAgeParam.slice(1)}` : ''}`)
         .then(json => {
           if (cancelled) return;
           if ('error' in json && json.error) throw new Error(String(json.error));
@@ -171,12 +177,12 @@ function App() {
     };
 
     fetchConditions(true);
-    const interval = setInterval(() => fetchConditions(false), REFRESH_MS);
+    const interval = setInterval(() => fetchConditions(false), refreshMs);
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [selectedBeach, isMobile]);
+  }, [selectedBeach, isMobile, showRadar, refreshMs, maxAgeParam]);
 
   useEffect(() => {
     let cancelled = false;
@@ -430,6 +436,11 @@ function App() {
                       {mapZoom >= 9 && (
                         <div className="marker-name-label">{beach.name}</div>
                       )}
+                      {beach.storm_badge && (
+                        <div className="marker-storm-badge" title="NWS weather warning active">
+                          <Zap size={11} fill="#0f172a" stroke="#0f172a" />
+                        </div>
+                      )}
                       <div className="pulse-ring" style={{ backgroundColor: `${beach.color}44` }}></div>
                       <div className="pulse-dot" style={{ backgroundColor: beach.color }}></div>
                       <div className="marker-label-flag" style={{ backgroundColor: beach.color }}>
@@ -516,8 +527,22 @@ function App() {
                     {data.outlook?.plan_today?.forecast && (
                       <span className="outlook-panel-note">{data.outlook.plan_today.forecast}</span>
                     )}
+                    {data.outlook?.plan_today?.hourly && (
+                      <span className="outlook-panel-note">Next hours: {data.outlook.plan_today.hourly}</span>
+                    )}
                   </div>
                 </div>
+
+                {data.outlook?.active_alerts && data.outlook.active_alerts.length > 0 && (
+                  <div className="active-alerts">
+                    {data.outlook.active_alerts.map((alert, i) => (
+                      <p key={i} className="active-alert-item">
+                        <Zap size={14} />
+                        <span><strong>{alert.event}:</strong> {alert.headline}</span>
+                      </p>
+                    ))}
+                  </div>
+                )}
 
                 <div className="activity-status-line">
                    <div className="status-item">

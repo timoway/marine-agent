@@ -150,18 +150,99 @@ def _storm_likelihood_in_text(text: str) -> str:
 def _max_likelihood(*levels: str) -> str:
     return max(levels, key=lambda lvl: LIKELIHOOD_RANK.get(lvl, 0))
 
+def _empty_hazards() -> dict:
+    return {
+        "hurricane_warning": False,
+        "hurricane_watch": False,
+        "tropical_storm_warning": False,
+        "tropical_storm_watch": False,
+        "severe_thunderstorm_warning": False,
+        "tornado_warning": False,
+        "special_marine_warning": False,
+        "special_weather_statement": False,
+        "marine_weather_statement": False,
+    }
+
+def _pop_to_likelihood(pop: Optional[int], short_forecast: str) -> str:
+    sf = (short_forecast or "").lower()
+    text_lvl = _storm_likelihood_in_text(sf)
+    if pop is None:
+        return text_lvl
+    if pop >= 70:
+        return _max_likelihood(text_lvl, "likely")
+    if pop >= 50:
+        return _max_likelihood(text_lvl, "chance")
+    return text_lvl
+
+def _analyze_hourly(hourly_periods: list) -> dict:
+    now = _fl_now()
+    current = None
+    next_hours = []
+    for period in hourly_periods[:8]:
+        try:
+            start = datetime.datetime.fromisoformat(period["startTime"])
+        except (KeyError, ValueError, TypeError):
+            continue
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=FL_TZ)
+        delta_h = (start - now).total_seconds() / 3600
+        if -1 <= delta_h < 1 and current is None:
+            current = period
+        elif 0 <= delta_h < 3:
+            next_hours.append(period)
+
+    window = ([current] if current else []) + next_hours
+    if not window and hourly_periods:
+        window = hourly_periods[:3]
+
+    max_pop = 0
+    now_likelihood = "none"
+    summaries = []
+    for period in window:
+        pop = period.get("probabilityOfPrecipitation", {}).get("value")
+        if pop is not None:
+            max_pop = max(max_pop, int(pop))
+        short_fc = period.get("shortForecast", "")
+        summaries.append(f"{period.get('startTime', '')[:16]}: {short_fc} ({pop or 0}% PoP)")
+        lvl = _pop_to_likelihood(pop, short_fc)
+        if period is current or period in next_hours[:2]:
+            now_likelihood = _max_likelihood(now_likelihood, lvl)
+
+    return {
+        "now_likelihood": now_likelihood,
+        "max_pop": max_pop,
+        "current_short": current.get("shortForecast", "") if current else "",
+        "summary": "; ".join(summaries[:3]),
+    }
+
 def _analyze_weather_situation(forecast: dict) -> dict:
     now = _fl_now()
     hour = now.hour
     periods = forecast.get("periods", [])
     hazards = forecast.get("hazards", {})
+    active_alerts = forecast.get("active_alerts", [])
 
     if hazards.get("hurricane_warning") or hazards.get("tropical_storm_warning") or hazards.get("tornado_warning"):
         advisory_level = "severe"
         advisory_reason = "Active NWS warning for tropical or severe weather"
-    elif hazards.get("severe_thunderstorm_warning"):
+    elif hazards.get("special_marine_warning") or hazards.get("severe_thunderstorm_warning"):
         advisory_level = "active"
-        advisory_reason = "Severe thunderstorm warning in effect"
+        advisory_reason = next(
+            (a["headline"] for a in active_alerts if a["event"] in ("Special Marine Warning", "Severe Thunderstorm Warning")),
+            "Active marine or severe thunderstorm warning",
+        )
+    elif hazards.get("special_weather_statement"):
+        advisory_level = "active"
+        advisory_reason = next(
+            (a["headline"] for a in active_alerts if a["event"] == "Special Weather Statement"),
+            "NWS special weather statement for nearby storms",
+        )
+    elif hazards.get("marine_weather_statement"):
+        advisory_level = "likely"
+        advisory_reason = next(
+            (a["headline"] for a in active_alerts if a["event"] == "Marine Weather Statement"),
+            "Marine weather statement in effect",
+        )
     elif hazards.get("hurricane_watch") or hazards.get("tropical_storm_watch"):
         advisory_level = "likely"
         advisory_reason = "Tropical weather watch in effect"
@@ -207,6 +288,14 @@ def _analyze_weather_situation(forecast: dict) -> dict:
     else:
         now_likelihood = _max_likelihood(now_likelihood, _storm_likelihood_in_text(summary))
 
+    hourly = _analyze_hourly(forecast.get("hourly_periods", []))
+    if hourly["now_likelihood"] != "none":
+        now_likelihood = _max_likelihood(now_likelihood, hourly["now_likelihood"])
+    if hourly["max_pop"] >= 70:
+        now_likelihood = _max_likelihood(now_likelihood, "likely")
+    elif hourly["max_pop"] >= 50:
+        now_likelihood = _max_likelihood(now_likelihood, "chance")
+
     return {
         "hour": hour,
         "advisory_level": advisory_level,
@@ -214,7 +303,10 @@ def _analyze_weather_situation(forecast: dict) -> dict:
         "now_likelihood": now_likelihood,
         "later_likelihood": later_likelihood,
         "forecast_headline": summary,
+        "hourly_summary": hourly.get("summary", ""),
+        "hourly_max_pop": hourly.get("max_pop", 0),
         "current_period": periods[0].get("name", "") if periods else "",
+        "active_alerts": active_alerts,
     }
 
 def _forecast_plan_status(situation: dict) -> tuple[str, str]:
@@ -383,10 +475,13 @@ def _build_outlook(flag: dict, wave_ft: float, wind_mph: float, red_tide: str, m
             "color": VERDICT_COLORS[plan_status],
             "headline": plan_reason,
             "forecast": situation["forecast_headline"],
+            "hourly": situation.get("hourly_summary", ""),
         },
         "verdict": verdict,
         "activities": activities,
         "activities_summary": _activities_summary(activities),
+        "storm_badge": len(situation.get("active_alerts", [])) > 0,
+        "active_alerts": situation.get("active_alerts", []),
     }
 
 def _has_red_tide(data: dict) -> bool:
@@ -605,33 +700,57 @@ def _get_nws_obs(config: dict):
     except Exception:
         return 75.0, 8.0, "N/A"
 
+STORM_ALERT_EVENTS = frozenset({
+    "Special Marine Warning",
+    "Marine Weather Statement",
+    "Special Weather Statement",
+    "Severe Thunderstorm Warning",
+    "Tornado Warning",
+    "Hurricane Warning",
+    "Hurricane Watch",
+    "Tropical Storm Warning",
+    "Tropical Storm Watch",
+    "Flash Flood Warning",
+})
+
 def _get_nws_forecast(config: dict):
     try:
         points_url = f"https://api.weather.gov/points/{config['lat']},{config['lon']}"
         points_r = requests.get(points_url, headers={'User-Agent': 'MarineAgent/1.0'}, timeout=8).json()
-        f_url = points_r['properties']['forecast']
+        props = points_r['properties']
+        f_url = props['forecast']
         f_r = requests.get(f_url, headers={'User-Agent': 'MarineAgent/1.0'}, timeout=8).json()
         periods = f_r['properties']['periods']
         summary = f"{periods[0]['name']}: {periods[0]['detailedForecast']}"
-        
+
+        hourly_periods = []
+        hourly_url = props.get('forecastHourly')
+        if hourly_url:
+            try:
+                h_r = requests.get(hourly_url, headers={'User-Agent': 'MarineAgent/1.0'}, timeout=8).json()
+                hourly_periods = h_r.get('properties', {}).get('periods', [])[:8]
+            except Exception:
+                pass
+
         alerts_url = f"https://api.weather.gov/alerts/active?point={config['lat']},{config['lon']}"
         a_r = requests.get(alerts_url, headers={'User-Agent': 'MarineAgent/1.0'}, timeout=8).json()
         rip = "Low Risk"
-        hazards = {
-            "hurricane_warning": False,
-            "hurricane_watch": False,
-            "tropical_storm_warning": False,
-            "tropical_storm_watch": False,
-            "severe_thunderstorm_warning": False,
-            "tornado_warning": False,
-        }
+        hazards = _empty_hazards()
+        active_alerts = []
         for alert in a_r.get('features', []):
-            props = alert.get('properties', {})
-            headline = props.get('headline', '').lower()
-            event = props.get('event', '').lower()
-            combined = f"{headline} {event}"
+            aprops = alert.get('properties', {})
+            headline = aprops.get('headline', '')
+            event = aprops.get('event', '')
+            combined = f"{headline} {event}".lower()
             if "rip current" in combined:
                 rip = "High Risk (NWS Alert)"
+            if event in STORM_ALERT_EVENTS:
+                active_alerts.append({
+                    "event": event,
+                    "headline": headline,
+                    "severity": aprops.get('severity', ''),
+                    "urgency": aprops.get('urgency', ''),
+                })
             if "hurricane warning" in combined:
                 hazards["hurricane_warning"] = True
             elif "hurricane watch" in combined:
@@ -644,6 +763,12 @@ def _get_nws_forecast(config: dict):
                 hazards["severe_thunderstorm_warning"] = True
             if "tornado warning" in combined:
                 hazards["tornado_warning"] = True
+            if event == "Special Marine Warning":
+                hazards["special_marine_warning"] = True
+            elif event == "Special Weather Statement":
+                hazards["special_weather_statement"] = True
+            elif event == "Marine Weather Statement":
+                hazards["marine_weather_statement"] = True
 
         station_info = NWS_STATIONS.get(config['nws_station'], {"lat": config['lat'], "lon": config['lon']})
         dist = calculate_relative_position(station_info["lat"], station_info["lon"], config["lat"], config["lon"])
@@ -652,7 +777,9 @@ def _get_nws_forecast(config: dict):
             "rip_current": rip,
             "source": f"NWS {config['nws_station']} ({dist})",
             "periods": periods,
+            "hourly_periods": hourly_periods,
             "hazards": hazards,
+            "active_alerts": active_alerts,
         }
     except Exception:
         return {
@@ -660,14 +787,9 @@ def _get_nws_forecast(config: dict):
             "rip_current": "Low Risk",
             "source": "NWS",
             "periods": [],
-            "hazards": {
-                "hurricane_warning": False,
-                "hurricane_watch": False,
-                "tropical_storm_warning": False,
-                "tropical_storm_watch": False,
-                "severe_thunderstorm_warning": False,
-                "tornado_warning": False,
-            },
+            "hourly_periods": [],
+            "hazards": _empty_hazards(),
+            "active_alerts": [],
         }
 
 def _get_water_temp(config: dict, modeled_sst_f: Optional[float]) -> tuple[str, str]:
@@ -905,25 +1027,50 @@ def rank_beaches(activity: str = "paddling", limit: int = 5, beach_id: str = "ve
     return rank_beaches_data(activity=activity, limit=limit, beach_id=beach_id, radius_miles=radius_miles)
 
 # --- API ROUTES FOR FRONTEND DASHBOARD ---
+def _cache_age_seconds(data: dict) -> float:
+    try:
+        ts = datetime.datetime.fromisoformat(data["timestamp"])
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=FL_TZ)
+        return (_fl_now() - ts).total_seconds()
+    except Exception:
+        return float("inf")
+
+async def _refresh_all_if_stale(max_age: int) -> None:
+    if max_age <= 0:
+        return
+    stale = not GLOBAL_DATA_STORE
+    if not stale:
+        for data in GLOBAL_DATA_STORE.values():
+            if _cache_age_seconds(data) > max_age:
+                stale = True
+                break
+    if stale:
+        for beach_id in BEACH_CONFIG:
+            await asyncio.to_thread(refresh_one_beach, beach_id)
+
 @app.get("/api/beaches_with_flags")
-async def list_beaches_with_flags():
+async def list_beaches_with_flags(max_age: int = 0):
+    await _refresh_all_if_stale(max_age)
     res = []
     for k, v in BEACH_CONFIG.items():
         data = GLOBAL_DATA_STORE.get(k)
-        color = data.get("outlook", {}).get("color", "#4ade80") if data else "#4ade80"
+        outlook = data.get("outlook", {}) if data else {}
         res.append({
             "id": k,
             "name": v["name"],
             "lat": v["lat"],
             "lon": v["lon"],
-            "color": color
+            "color": outlook.get("color", "#4ade80"),
+            "storm_badge": outlook.get("storm_badge", False),
         })
     return res
 
 @app.get("/api/conditions/{beach_id}")
-async def get_beach_conditions_api(beach_id: str):
-    if beach_id in GLOBAL_DATA_STORE:
-        return GLOBAL_DATA_STORE[beach_id]
+async def get_beach_conditions_api(beach_id: str, max_age: int = 0):
+    cached = GLOBAL_DATA_STORE.get(beach_id)
+    if cached and (max_age <= 0 or _cache_age_seconds(cached) <= max_age):
+        return cached
     return await asyncio.to_thread(refresh_one_beach, beach_id)
 
 @app.get("/api/rank")

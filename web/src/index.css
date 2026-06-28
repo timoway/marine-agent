@@ -577,6 +577,22 @@ body {
   border: 1px solid rgba(255,255,255,0.2);
 }
 
+.marker-storm-badge {
+  position: absolute;
+  top: -2px;
+  right: -10px;
+  z-index: 4;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #facc15;
+  border: 2px solid #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
 .map-marker-pulse.selected .pulse-dot {
   width: 12px;
   height: 12px;
@@ -663,6 +679,28 @@ body {
   font-size: 0.68rem;
   color: #64748b;
   line-height: 1.35;
+}
+
+.active-alerts {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(250, 204, 21, 0.08);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+}
+
+.active-alert-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.76rem;
+  color: #fde68a;
+  line-height: 1.35;
+}
+
+.active-alert-item + .active-alert-item {
+  margin-top: 8px;
 }
 
 .activity-reasons {

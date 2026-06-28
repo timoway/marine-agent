@@ -638,18 +638,17 @@ body {
     backdrop-filter: blur(3px);
     z-index: 2900;
   }
-
   .main-content {
     padding: 12px 16px 16px;
     padding-top: max(8px, env(safe-area-inset-top, 8px));
     padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   }
-
   .beach-name { font-size: 1.5rem; }
   .hero-value { font-size: 1.75rem; }
   .card { padding: 18px; border-radius: 16px; }
   .card-value { font-size: 1.5rem; }
   .reason-text { font-size: 0.95rem; }
+
   .glass-flag {
     width: 40px;
     height: 40px;

@@ -87,6 +87,7 @@ function App() {
   const [rankActivity, setRankActivity] = useState<RankActivity>('paddling');
   const [rankData, setRankData] = useState<RankResponse | null>(null);
   const [rankLoading, setRankLoading] = useState(false);
+  const [rankError, setRankError] = useState<string | null>(null);
 
   const closeSidebar = () => setSidebarOpen(false);
   const openSidebar = () => setSidebarOpen(true);
@@ -154,6 +155,7 @@ function App() {
   useEffect(() => {
     let cancelled = false;
     setRankLoading(true);
+    setRankError(null);
     const params = new URLSearchParams({
       activity: rankActivity,
       beach_id: selectedBeach,
@@ -171,6 +173,7 @@ function App() {
         if (!cancelled) {
           console.error(err);
           setRankData(null);
+          setRankError(err instanceof Error ? err.message : 'Could not load rankings');
           setRankLoading(false);
         }
       });
@@ -276,7 +279,9 @@ function App() {
               ))}
             </div>
           ) : (
-            <p className="rank-empty">No ranked beaches in range yet.</p>
+            <p className="rank-empty">
+              {rankError ?? 'No ranked beaches in range yet.'}
+            </p>
           )}
         </div>
 

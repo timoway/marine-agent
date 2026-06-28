@@ -111,7 +111,7 @@ def calculate_flag(wave_ft: float, wind_mph: float, red_tide_status: str, jellyf
     return {"label": "GREEN FLAG", "vibe": "Low Hazard", "color": "#4ade80"}
 
 ACTIVITY_RANK = {"Green": 0, "Yellow": 1, "Red": 2}
-VALID_ACTIVITIES = frozenset(ACTIVITY_RANK)
+VALID_ACTIVITIES = frozenset({"paddling", "swimming", "beach"})
 
 def _has_red_tide(data: dict) -> bool:
     return data.get("red_tide", {}).get("status", "Not Present") != "Not Present"

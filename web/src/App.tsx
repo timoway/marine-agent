@@ -12,6 +12,7 @@ import {
 // --- CONFIGURATION ---
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
 const API_BASE = import.meta.env.VITE_API_BASE || `http://${window.location.hostname}:8000/api`;
+const REFRESH_MS = 5 * 60 * 1000; // match backend sync interval
 
 interface Beach { id: string; name: string; lat: number; lon: number; color?: string; }
 
@@ -50,29 +51,59 @@ function App() {
   const [showRadar, setShowRadar] = useState(false);
 
   useEffect(() => {
-    fetch(`${API_BASE}/beaches_with_flags`).then(res => res.json()).then(setBeaches).catch(err => console.error(err));
+    const fetchBeaches = () => {
+      fetch(`${API_BASE}/beaches_with_flags`)
+        .then(res => res.json())
+        .then(setBeaches)
+        .catch(err => console.error(err));
+    };
+    fetchBeaches();
+    const interval = setInterval(fetchBeaches, REFRESH_MS);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    fetch(`${API_BASE}/conditions/${selectedBeach}`)
-      .then(res => res.json())
-      .then(json => {
-        if (json.error) throw new Error(json.error);
-        setData(json);
-        setLoading(false);
-        if (window.innerWidth <= 1024) setSidebarOpen(false);
-      })
-      .catch(err => {
-        setError(err.message);
-        setLoading(false);
-      });
+    let cancelled = false;
+
+    const fetchConditions = (showLoading: boolean) => {
+      if (showLoading) {
+        setLoading(true);
+        setError(null);
+      }
+      fetch(`${API_BASE}/conditions/${selectedBeach}`)
+        .then(res => res.json())
+        .then(json => {
+          if (cancelled) return;
+          if (json.error) throw new Error(json.error);
+          setData(json);
+          setLoading(false);
+          if (showLoading && window.innerWidth <= 1024) setSidebarOpen(false);
+        })
+        .catch(err => {
+          if (cancelled) return;
+          if (showLoading) {
+            setError(err.message);
+            setLoading(false);
+          }
+        });
+    };
+
+    fetchConditions(true);
+    const interval = setInterval(() => fetchConditions(false), REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [selectedBeach]);
 
   const filteredBeaches = useMemo(() => beaches.filter(beach => 
     beach.name.toLowerCase().includes(searchQuery.toLowerCase())
   ), [beaches, searchQuery]);
+
+  const lastUpdated = useMemo(() => {
+    if (!data?.timestamp) return null;
+    return new Date(data.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }, [data?.timestamp]);
 
   return (
     <div className="dashboard-container">
@@ -202,6 +233,12 @@ function App() {
                       <Activity size={16} /> {data.tides?.next_event ?? '--'}
                       {data.tides?.trend === 'Rising' ? <TrendingUp size={14} style={{ marginLeft: '4px' }} /> : <TrendingDown size={14} style={{ marginLeft: '4px' }} />}
                     </span>
+                    {lastUpdated && (
+                      <>
+                        <span className="divider">|</span>
+                        <span className="meta-item" style={{ opacity: 0.7 }}>Updated {lastUpdated}</span>
+                      </>
+                    )}
                   </div>
                 </div>
                 {/* GLASSY FLAG ICON */}

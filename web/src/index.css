@@ -126,6 +126,153 @@ body {
   box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
 }
 
+.rank-panel {
+  flex-shrink: 0;
+  margin-bottom: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid #334155;
+}
+
+.rank-panel-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.rank-panel-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.rank-panel-subtitle {
+  font-size: 0.72rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.rank-activity-chips {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.rank-chip {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 999px;
+  border: 1px solid #334155;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rank-chip.active {
+  background: rgba(56, 189, 248, 0.15);
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #7dd3fc;
+}
+
+.rank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rank-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: rgba(30, 41, 59, 0.55);
+  color: #cbd5e1;
+  cursor: pointer;
+  text-align: left;
+}
+
+.rank-item:hover {
+  background: rgba(51, 65, 85, 0.7);
+  color: #f8fafc;
+}
+
+.rank-item.active {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.rank-number {
+  width: 20px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #38bdf8;
+  flex-shrink: 0;
+}
+
+.rank-item-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rank-item-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rank-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.68rem;
+  color: #64748b;
+}
+
+.rank-item-meta .dot {
+  width: 7px;
+  height: 7px;
+}
+
+.rank-tier-badge {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 6px;
+  border-radius: 999px;
+}
+
+.rank-tier-badge.caution {
+  color: #c4b5fd;
+  background: rgba(168, 85, 247, 0.15);
+}
+
+.rank-tier-badge.avoid {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.15);
+}
+
+.rank-empty {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
 .search-container {
   position: relative;
   margin-bottom: 14px;

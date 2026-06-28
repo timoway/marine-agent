@@ -18,6 +18,37 @@ const REFRESH_MS = 5 * 60 * 1000; // match backend sync interval
 
 interface Beach { id: string; name: string; lat: number; lon: number; color?: string; }
 
+type RankActivity = 'paddling' | 'swimming' | 'beach';
+
+interface RankResult {
+  rank: number;
+  beach_id: string;
+  name: string;
+  rank_tier: 'best' | 'caution' | 'avoid';
+  activity_status: string;
+  wind_mph: number;
+  surf_ft: number;
+  distance_miles?: number;
+}
+
+interface RankResponse {
+  activity: RankActivity;
+  nearby?: {
+    anchor_beach_id: string | null;
+    anchor_name: string;
+    radius_miles: number;
+    radius_expanded: boolean;
+  };
+  results: RankResult[];
+}
+
+const RANK_RADIUS_MILES = 50;
+const RANK_ACTIVITY_LABELS: Record<RankActivity, string> = {
+  paddling: 'Paddle',
+  swimming: 'Swim',
+  beach: 'Beach',
+};
+
 interface MarineData {
   beach: string;
   lat: number;
@@ -53,6 +84,9 @@ function App() {
   const [viewMode, setViewMode] = useState<'dashboard' | 'map'>('dashboard');
   const [showRadar, setShowRadar] = useState(false);
   const [mapZoom, setMapZoom] = useState(8.2);
+  const [rankActivity, setRankActivity] = useState<RankActivity>('paddling');
+  const [rankData, setRankData] = useState<RankResponse | null>(null);
+  const [rankLoading, setRankLoading] = useState(false);
 
   const closeSidebar = () => setSidebarOpen(false);
   const openSidebar = () => setSidebarOpen(true);
@@ -117,6 +151,37 @@ function App() {
     };
   }, [selectedBeach, isMobile]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setRankLoading(true);
+    const params = new URLSearchParams({
+      activity: rankActivity,
+      beach_id: selectedBeach,
+      radius_miles: String(RANK_RADIUS_MILES),
+      limit: '5',
+    });
+    apiFetch<RankResponse>(`/rank?${params}`)
+      .then(json => {
+        if (!cancelled) {
+          setRankData(json);
+          setRankLoading(false);
+        }
+      })
+      .catch(err => {
+        if (!cancelled) {
+          console.error(err);
+          setRankData(null);
+          setRankLoading(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [selectedBeach, rankActivity]);
+
+  const rankAnchorName = useMemo(() => {
+    const beach = beaches.find(b => b.id === selectedBeach);
+    return beach?.name ?? rankData?.nearby?.anchor_name ?? 'this area';
+  }, [beaches, selectedBeach, rankData?.nearby?.anchor_name]);
+
   const filteredBeaches = useMemo(() => beaches.filter(beach => 
     beach.name.toLowerCase().includes(searchQuery.toLowerCase())
   ), [beaches, searchQuery]);
@@ -160,6 +225,59 @@ function App() {
           <button className={`toggle-btn ${viewMode === 'map' ? 'active' : ''}`} onClick={() => switchView('map')}>
             <MapIcon size={14} /> Map
           </button>
+        </div>
+
+        <div className="rank-panel">
+          <div className="rank-panel-header">
+            <span className="rank-panel-title">Best nearby today</span>
+            <span className="rank-panel-subtitle">
+              Within {rankData?.nearby?.radius_miles ?? RANK_RADIUS_MILES} mi of {rankAnchorName}
+              {rankData?.nearby?.radius_expanded ? ' (expanded)' : ''}
+            </span>
+          </div>
+          <div className="rank-activity-chips">
+            {(Object.keys(RANK_ACTIVITY_LABELS) as RankActivity[]).map(activity => (
+              <button
+                key={activity}
+                type="button"
+                className={`rank-chip ${rankActivity === activity ? 'active' : ''}`}
+                onClick={() => setRankActivity(activity)}
+              >
+                {RANK_ACTIVITY_LABELS[activity]}
+              </button>
+            ))}
+          </div>
+          {rankLoading ? (
+            <p className="rank-empty">Updating rankings…</p>
+          ) : rankData?.results?.length ? (
+            <div className="rank-list">
+              {rankData.results.map(result => (
+                <button
+                  key={result.beach_id}
+                  type="button"
+                  className={`rank-item ${selectedBeach === result.beach_id ? 'active' : ''} tier-${result.rank_tier}`}
+                  onClick={() => selectBeach(result.beach_id)}
+                >
+                  <span className="rank-number">{result.rank}</span>
+                  <span className="rank-item-body">
+                    <span className="rank-item-name">{result.name}</span>
+                    <span className="rank-item-meta">
+                      <span className={`dot ${result.activity_status}`} />
+                      {result.activity_status} · {result.wind_mph} mph · {result.surf_ft} ft
+                      {result.distance_miles != null ? ` · ${result.distance_miles} mi` : ''}
+                    </span>
+                  </span>
+                  {result.rank_tier !== 'best' && (
+                    <span className={`rank-tier-badge ${result.rank_tier}`}>
+                      {result.rank_tier === 'avoid' ? 'Red tide' : 'Caution'}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="rank-empty">No ranked beaches in range yet.</p>
+          )}
         </div>
 
         <div className="search-container">

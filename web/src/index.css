@@ -398,3 +398,43 @@ body {
 .loading-spinner { display: flex; justify-content: center; align-items: center; min-height: 400px; }
 .spinner { font-size: 50px; animation: wave 2s infinite ease-in-out; }
 @keyframes wave { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+
+.install-prompt {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid #334155;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+}
+
+.install-prompt-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  color: #e2e8f0;
+}
+
+.install-prompt-close {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  flex-shrink: 0;
+}
+
+@media (display-mode: standalone) {
+  .install-prompt { display: none; }
+}

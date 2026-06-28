@@ -132,7 +132,7 @@ def _get_red_tide_status(config: dict) -> str:
     try:
         url = "https://atoll.floridamarine.org/arcgis/rest/services/Projects_FWC/HAB_Current/FeatureServer/0/query"
         params = {"where": f"County = '{config['county']}'", "outFields": "Count_", "orderByFields": "SampleDate DESC", "resultRecordCount": 1, "f": "json"}
-        r = requests.get(url, params=params, verify=False, timeout=8).json()
+        r = requests.get(url, params=params, timeout=8).json()
         feat = r.get('features', [])
         if feat:
             cnt = feat[0]['attributes']['Count_']

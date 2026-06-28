@@ -3,12 +3,13 @@ import Map, { Marker, NavigationControl, Source, Layer } from 'react-map-gl/mapb
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { 
   Waves, Thermometer, Eye, Droplets, AlertTriangle, 
-  Ship, Calendar, Search, Menu, X, 
+  Ship, Calendar, Search, Menu, X, LayoutDashboard, Map as MapIcon,
   Activity, Palette, Leaf, Moon, CloudSun, Navigation2,
-  TrendingUp, TrendingDown, Flag, Radar
+  TrendingUp, TrendingDown, Flag, Radar, ChevronRight
 } from 'lucide-react';
 import InstallPrompt from './InstallPrompt';
 import { apiFetch } from './api';
+import { useMediaQuery } from './useMediaQuery';
 
 // --- CONFIGURATION ---
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
@@ -21,7 +22,7 @@ interface MarineData {
   lat: number;
   lon: number;
   timestamp: string;
-  tides: { predictions: any[]; water_temp: string; current_status: string; trend: string; next_event: string; source: string; };
+  tides: { predictions: any[]; water_temp: string; water_temp_source?: string; current_status: string; trend: string; next_event: string; source: string; };
   forecast: { summary: string; rip_current: string; source: string; };
   skywatch: { moon_phase: string; illumination: string; planets_visible: string; upcoming_event: string; };
   surf: { height: number; period: number; intensity: string; type: string; rip_current: string; };
@@ -46,9 +47,28 @@ function App() {
   const [data, setData] = useState<MarineData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const isMobile = useMediaQuery('(max-width: 1024px)');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'dashboard' | 'map'>('dashboard');
   const [showRadar, setShowRadar] = useState(false);
+
+  const closeSidebar = () => setSidebarOpen(false);
+  const openSidebar = () => setSidebarOpen(true);
+
+  const switchView = (mode: 'dashboard' | 'map') => {
+    setViewMode(mode);
+    if (isMobile) closeSidebar();
+  };
+
+  const selectBeach = (beachId: string) => {
+    setSelectedBeach(beachId);
+    setViewMode('dashboard');
+    if (isMobile) closeSidebar();
+  };
+
+  useEffect(() => {
+    setSidebarOpen(!isMobile);
+  }, [isMobile]);
 
   useEffect(() => {
     const fetchBeaches = () => {
@@ -75,7 +95,7 @@ function App() {
           if ('error' in json && json.error) throw new Error(String(json.error));
           setData(json);
           setLoading(false);
-          if (showLoading && window.innerWidth <= 1024) setSidebarOpen(false);
+          if (showLoading && isMobile) closeSidebar();
         })
         .catch(err => {
           if (cancelled) return;
@@ -92,7 +112,7 @@ function App() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [selectedBeach]);
+  }, [selectedBeach, isMobile]);
 
   const filteredBeaches = useMemo(() => beaches.filter(beach => 
     beach.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -106,23 +126,31 @@ function App() {
   return (
     <div className="dashboard-container">
       <InstallPrompt />
-      {sidebarOpen && window.innerWidth <= 1024 && (
-        <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)}></div>
+      {sidebarOpen && isMobile && (
+        <div className="sidebar-overlay" onClick={closeSidebar} aria-hidden="true" />
       )}
 
-      {/* Sidebar */}
-      <div className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
+      <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'} ${isMobile ? 'sidebar-drawer' : ''}`} aria-label="Beach navigation">
         <div className="sidebar-header">
-           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Ship color="white" size={24} />
-              <h2 style={{ margin: 0, color: 'white', fontSize: '1.2rem' }}>MarineAgent</h2>
-           </div>
-           <button onClick={() => setSidebarOpen(false)} className="menu-close-mobile"><X size={24} /></button>
+          <div className="sidebar-brand">
+            <Ship color="#38bdf8" size={22} />
+            <div>
+              <h2 className="sidebar-title">MarineAgent</h2>
+              <p className="sidebar-subtitle">SWFL Coastal Intel</p>
+            </div>
+          </div>
+          <button onClick={closeSidebar} className="sidebar-close-btn" aria-label="Close menu">
+            <X size={20} />
+          </button>
         </div>
 
         <div className="view-toggle">
-           <button className={`toggle-btn ${viewMode === 'dashboard' ? 'active' : ''}`} onClick={() => setViewMode('dashboard')}>Dashboard</button>
-           <button className={`toggle-btn ${viewMode === 'map' ? 'active' : ''}`} onClick={() => setViewMode('map')}>Map</button>
+          <button className={`toggle-btn ${viewMode === 'dashboard' ? 'active' : ''}`} onClick={() => switchView('dashboard')}>
+            <LayoutDashboard size={14} /> Dashboard
+          </button>
+          <button className={`toggle-btn ${viewMode === 'map' ? 'active' : ''}`} onClick={() => switchView('map')}>
+            <MapIcon size={14} /> Map
+          </button>
         </div>
 
         <div className="search-container">
@@ -138,22 +166,47 @@ function App() {
 
         <div className="beach-list">
           {filteredBeaches.map(beach => (
-            <div 
+            <button
               key={beach.id}
+              type="button"
               className={`beach-item ${selectedBeach === beach.id ? 'active' : ''}`}
-              onClick={() => { setSelectedBeach(beach.id); setViewMode('dashboard'); }}
+              onClick={() => selectBeach(beach.id)}
             >
-              <div className="beach-item-dot" style={{ backgroundColor: beach.color }}></div>
-              {beach.name}
-            </div>
+              <div className="beach-item-dot" style={{ backgroundColor: beach.color }} />
+              <span className="beach-item-name">{beach.name}</span>
+              <ChevronRight size={16} className="beach-item-chevron" />
+            </button>
           ))}
         </div>
-      </div>
+
+        {isMobile && (
+          <p className="sidebar-hint">Tap outside or ✕ to close</p>
+        )}
+      </aside>
 
       <div className="main-content">
-        {!sidebarOpen && (
-          <button className="floating-menu-btn" onClick={() => setSidebarOpen(true)}>
-             <Menu size={24} />
+        {isMobile && (
+          <header className="mobile-top-bar">
+            <button className="top-bar-btn" onClick={openSidebar} aria-label="Open beach menu">
+              <Menu size={22} />
+            </button>
+            <div className="top-bar-center">
+              <span className="top-bar-eyebrow">Coastal Intel</span>
+              <span className="top-bar-title">{data?.beach ?? 'MarineAgent'}</span>
+            </div>
+            <button
+              className={`top-bar-btn ${viewMode === 'map' ? 'active' : ''}`}
+              onClick={() => switchView(viewMode === 'map' ? 'dashboard' : 'map')}
+              aria-label={viewMode === 'map' ? 'Show dashboard' : 'Show map'}
+            >
+              {viewMode === 'map' ? <LayoutDashboard size={20} /> : <MapIcon size={20} />}
+            </button>
+          </header>
+        )}
+
+        {!isMobile && !sidebarOpen && (
+          <button className="floating-menu-btn" onClick={openSidebar} aria-label="Open menu">
+            <Menu size={24} />
           </button>
         )}
 
@@ -223,13 +276,15 @@ function App() {
             <div className="header mobile-header">
               <div className="header-row">
                 <div className="header-main">
-                  <h1 className="beach-name">{data.beach}</h1>
                   <div className="beach-meta beach-meta-compact">
                     <span className="meta-item"><Thermometer size={14} /> {data.weather?.temp_f ?? '--'}°F air</span>
                     <span className="meta-item"><Droplets size={14} /> {data.tides?.water_temp ?? '--'}°F water</span>
                     <span className="meta-item"><Navigation2 size={14} /> {data.weather?.wind_mph ?? '--'} mph {data.weather?.wind_dir ?? ''}</span>
                     {lastUpdated && <span className="meta-item meta-muted">Updated {lastUpdated}</span>}
                   </div>
+                  {data.tides?.water_temp_source && (
+                    <p className="water-temp-source">Water temp: {data.tides.water_temp_source}</p>
+                  )}
                 </div>
                 <div className="glass-flag" style={{ borderColor: data.outlook?.color }}>
                   <Flag size={20} color={data.outlook?.color} fill={data.outlook?.color} />
@@ -329,7 +384,11 @@ function App() {
               </div>
 
               <div className="card">
-                <div className="card-title"><Droplets size={18} /> Upcoming Tides</div>
+                <div className="card-title"><Droplets size={18} /> Tides & Water</div>
+                <div className="card-value" style={{ fontSize: '1.4rem' }}>{data.tides?.water_temp ?? '--'}°F</div>
+                {data.tides?.water_temp_source && (
+                  <div className="card-subvalue">{data.tides.water_temp_source}</div>
+                )}
                 <div className="tide-list">
                   {data.tides?.predictions?.length > 0 ? data.tides.predictions.map((tide: any, i: number) => (
                     <div key={i} className="tide-item">

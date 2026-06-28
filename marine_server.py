@@ -144,16 +144,21 @@ def _get_red_tide_status(config: dict) -> str:
         pass
     return "Not Present"
 
-def _get_marine_waves(config: dict):
+def _get_marine_data(config: dict):
     try:
-        url = f"https://marine-api.open-meteo.com/v1/marine?latitude={config['lat']}&longitude={config['lon']}&hourly=wave_height,swell_wave_period&timezone=auto"
+        url = (
+            f"https://marine-api.open-meteo.com/v1/marine?latitude={config['lat']}&longitude={config['lon']}"
+            "&hourly=wave_height,swell_wave_period,sea_surface_temperature&timezone=auto"
+        )
         r = requests.get(url, timeout=5).json()
         h = datetime.datetime.now().hour
         wave_ft = r['hourly']['wave_height'][h] * 3.28
         period = r['hourly']['swell_wave_period'][h]
-        return wave_ft, period
+        sst_c = r['hourly']['sea_surface_temperature'][h]
+        sst_f = round((sst_c * 9 / 5) + 32, 1) if sst_c is not None else None
+        return wave_ft, period, sst_f
     except Exception:
-        return 0.5, 4.0
+        return 0.5, 4.0, None
 
 def _get_nws_obs(config: dict):
     try:
@@ -192,7 +197,22 @@ def _get_nws_forecast(config: dict):
     except Exception:
         return {"summary": "Forecast intermittent.", "rip_current": "Low Risk", "source": "NWS", "periods": []}
 
-def _get_tide_data(config: dict):
+def _get_water_temp(config: dict, modeled_sst_f: Optional[float]) -> tuple[str, str]:
+    try:
+        temp_url = (
+            f"https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station={config['tide_id']}"
+            "&product=water_temperature&datum=MLLW&time_zone=lst_ldt&units=english&format=json"
+        )
+        payload = requests.get(temp_url, timeout=3).json()
+        if payload.get("data"):
+            return payload["data"][0]["v"], "NOAA in-situ sensor"
+    except Exception:
+        pass
+    if modeled_sst_f is not None:
+        return str(modeled_sst_f), "Open-Meteo modeled nearshore"
+    return "--", "Unavailable"
+
+def _get_tide_data(config: dict, modeled_sst_f: Optional[float] = None):
     try:
         now = datetime.datetime.now()
         begin = now.strftime("%Y%m%d")
@@ -209,25 +229,21 @@ def _get_tide_data(config: dict):
         next_time_str = time_obj.strftime("%-I:%M %p")
         next_event_string = f"Next {next_type} Tide {next_time_str}"
 
-        temp_url = f"https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station={config['tide_id']}&product=water_temperature&datum=MLLW&time_zone=lst_ldt&units=english&format=json"
-        water_temp = "72.4"
-        try:
-            water_temp = requests.get(temp_url, timeout=3).json().get('data', [{}])[0].get('v', "72.4")
-        except Exception:
-            pass
+        water_temp, water_temp_source = _get_water_temp(config, modeled_sst_f)
         
         station_info = NOAA_STATIONS.get(config['tide_id'], {"lat": config['lat'], "lon": config['lon']})
         dist = calculate_relative_position(station_info["lat"], station_info["lon"], config["lat"], config["lon"])
         return {
             "predictions": future[:3], 
-            "water_temp": water_temp, 
+            "water_temp": water_temp,
+            "water_temp_source": water_temp_source,
             "current_status": f"{'High' if future[0]['type'] == 'L' else 'Low'} Tide", 
             "trend": "Rising" if future[0]['type'] == 'H' else "Falling", 
             "next_event": next_event_string,
             "source": f"NOAA {config['tide_id']} ({dist})"
         }
     except Exception:
-        return {"predictions": [], "water_temp": "--", "current_status": "N/A", "trend": "N/A", "next_event": "Tides Unavailable", "source": "N/A"}
+        return {"predictions": [], "water_temp": "--", "water_temp_source": "Unavailable", "current_status": "N/A", "trend": "N/A", "next_event": "Tides Unavailable", "source": "N/A"}
 
 def _get_skywatch():
     try:
@@ -287,12 +303,12 @@ def refresh_one_beach(beach_id: str) -> dict:
         beach_id = "venice"
     config = BEACH_CONFIG[beach_id]
     try:
-        wave_ft, period = _get_marine_waves(config)
+        wave_ft, period, sst_f = _get_marine_data(config)
         temp_f, wind_mph, wind_dir = _get_nws_obs(config)
         mote = _get_mote_report(config)
         red_tide = _get_red_tide_status(config)
         forecast = _get_nws_forecast(config)
-        tides = _get_tide_data(config)
+        tides = _get_tide_data(config, modeled_sst_f=sst_f)
         
         flag = calculate_flag(wave_ft, wind_mph, red_tide, mote["jellyfish"].lower() != "none")
         

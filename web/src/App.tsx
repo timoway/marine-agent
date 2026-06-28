@@ -6,7 +6,7 @@ import {
   Activity, Palette, Leaf, Moon, CloudSun, Navigation2,
   TrendingUp, TrendingDown, Flag, Radar, ChevronRight, Footprints
 } from 'lucide-react';
-import MapGL, { Marker, NavigationControl, Source, Layer, Popup } from 'react-map-gl/mapbox';
+import MapGL, { Marker, NavigationControl, Source, Layer } from 'react-map-gl/mapbox';
 import InstallPrompt from './InstallPrompt';
 import { apiFetch } from './api';
 import { useMediaQuery } from './useMediaQuery';
@@ -52,6 +52,7 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'dashboard' | 'map'>('dashboard');
   const [showRadar, setShowRadar] = useState(false);
+  const [mapZoom, setMapZoom] = useState(8.2);
 
   const closeSidebar = () => setSidebarOpen(false);
   const openSidebar = () => setSidebarOpen(true);
@@ -240,9 +241,10 @@ function App() {
                <span>RADAR</span>
              </button>
 
+             <p className="map-hint">Tap any flag for beach conditions</p>
              <MapGL
-               key={selectedBeach}
                initialViewState={mapFocus}
+               onMove={(evt) => setMapZoom(evt.viewState.zoom)}
                style={{ width: '100%', height: '100%' }}
                mapStyle="mapbox://styles/mapbox/navigation-night-v1"
                mapboxAccessToken={MAPBOX_TOKEN}
@@ -276,6 +278,9 @@ function App() {
                    }}
                  >
                     <div className={`map-marker-pulse ${selectedBeach === beach.id ? 'selected' : ''}`}>
+                      {mapZoom >= 9 && (
+                        <div className="marker-name-label">{beach.name}</div>
+                      )}
                       <div className="pulse-ring" style={{ backgroundColor: `${beach.color}44` }}></div>
                       <div className="pulse-dot" style={{ backgroundColor: beach.color }}></div>
                       <div className="marker-label-flag" style={{ backgroundColor: beach.color }}>
@@ -284,23 +289,6 @@ function App() {
                     </div>
                  </Marker>
                ))}
-
-               {data && viewMode === 'map' && (
-                 <Popup
-                   latitude={data.lat}
-                   longitude={data.lon}
-                   anchor="top"
-                   closeButton={false}
-                   closeOnClick={false}
-                   offset={12}
-                 >
-                   <div className="map-popup">
-                     <strong>{data.beach}</strong>
-                     <span>{data.outlook?.label ?? '--'}</span>
-                     <button type="button" onClick={() => switchView('dashboard')}>View dashboard</button>
-                   </div>
-                 </Popup>
-               )}
              </MapGL>
           </div>
         ) : loading ? (

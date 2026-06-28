@@ -33,7 +33,9 @@ GLOBAL_DATA_STORE: Dict[str, dict] = {}
 # --- DATA: STATIONS & BEACHES (SWFL + extended) ---
 NOAA_STATIONS = {
     "8725889": {"name": "Venice (Roberts Bay)", "lat": 27.1000, "lon": -82.4433},
-    "8726084": {"name": "Sarasota (Big Sarasota Pass area)", "lat": 27.3300, "lon": -82.5583},
+    "8726034": {"name": "Siesta Key, Big Sarasota Pass", "lat": 27.2839, "lon": -82.5650},
+    "8726243": {"name": "Anna Maria Key, Bradenton Beach", "lat": 27.4967, "lon": -82.7133},
+    "8726282": {"name": "Anna Maria Key, city pier", "lat": 27.5333, "lon": -82.7300},
     "8725577": {"name": "Port Boca Grande", "lat": 26.7267, "lon": -82.2583},
     "8725325": {"name": "Carlos Point (Fort Myers area)", "lat": 26.3983, "lon": -81.8767},
     "8725110": {"name": "Naples (Gulf of Mexico)", "lat": 26.1317, "lon": -81.8117},
@@ -62,8 +64,8 @@ NWS_STATIONS = {
 BEACH_CONFIG = {
     "venice": {"name": "Venice Beach", "mote_id": "33", "tide_id": "8725889", "county": "Sarasota", "lat": 27.1001, "lon": -82.4542, "nws_station": "KVNC", "shark_teeth": True},
     "manasota-key": {"name": "Manasota Key Beach", "mote_id": "6", "tide_id": "8725889", "county": "Sarasota", "lat": 27.0125, "lon": -82.4131, "nws_station": "KVNC", "shark_teeth": True},
-    "siesta": {"name": "Siesta Key Beach", "mote_id": "2", "tide_id": "8726084", "county": "Sarasota", "lat": 27.2662, "lon": -82.5658, "nws_station": "KSRQ", "shark_teeth": False},
-    "lido": {"name": "Lido Key Beach", "mote_id": "32", "tide_id": "8726084", "county": "Sarasota", "lat": 27.3188, "lon": -82.5786, "nws_station": "KSRQ", "shark_teeth": False},
+    "siesta": {"name": "Siesta Key Beach", "mote_id": "2", "tide_id": "8726034", "county": "Sarasota", "lat": 27.2662, "lon": -82.5658, "nws_station": "KSRQ", "shark_teeth": False},
+    "lido": {"name": "Lido Key Beach", "mote_id": "32", "tide_id": "8726034", "county": "Sarasota", "lat": 27.3188, "lon": -82.5786, "nws_station": "KSRQ", "shark_teeth": False},
     "caspersen": {"name": "Caspersen Beach", "mote_id": "34", "tide_id": "8725889", "county": "Sarasota", "lat": 27.0700, "lon": -82.4497, "nws_station": "KVNC", "shark_teeth": True},
     "nokomis": {"name": "Nokomis Beach", "mote_id": "35", "tide_id": "8725889", "county": "Sarasota", "lat": 27.1264, "lon": -82.4644, "nws_station": "KVNC", "shark_teeth": True},
     "englewood": {"name": "Englewood Beach", "mote_id": "7", "tide_id": "8725889", "county": "Charlotte", "lat": 26.9242, "lon": -82.3619, "nws_station": "KPGD", "shark_teeth": True},
@@ -71,9 +73,9 @@ BEACH_CONFIG = {
     "bonita": {"name": "Bonita Beach", "mote_id": "144", "tide_id": "8725110", "county": "Lee", "lat": 26.3308, "lon": -81.8447, "nws_station": "KAPF", "shark_teeth": False},
     "vanderbilt": {"name": "Vanderbilt Beach", "mote_id": "114", "tide_id": "8725110", "county": "Collier", "lat": 26.2558, "lon": -81.8253, "nws_station": "KAPF", "shark_teeth": False},
     "barefoot": {"name": "Barefoot Beach", "mote_id": "144", "tide_id": "8725110", "county": "Collier", "lat": 26.3158, "lon": -81.8353, "nws_station": "KAPF", "shark_teeth": False},
-    "bradenton": {"name": "Bradenton Beach", "mote_id": "4", "tide_id": "8726084", "county": "Manatee", "lat": 27.4695, "lon": -82.6987, "nws_station": "KSRQ", "shark_teeth": False},
-    "anna-maria": {"name": "Anna Maria Island", "mote_id": "3", "tide_id": "8726084", "county": "Manatee", "lat": 27.5273, "lon": -82.7154, "nws_station": "KSRQ", "shark_teeth": False},
-    "holmes": {"name": "Holmes Beach", "mote_id": "5", "tide_id": "8726084", "county": "Manatee", "lat": 27.4984, "lon": -82.7126, "nws_station": "KSRQ", "shark_teeth": False},
+    "bradenton": {"name": "Bradenton Beach", "mote_id": "4", "tide_id": "8726243", "county": "Manatee", "lat": 27.4695, "lon": -82.6987, "nws_station": "KSRQ", "shark_teeth": False},
+    "anna-maria": {"name": "Anna Maria Island", "mote_id": "3", "tide_id": "8726282", "county": "Manatee", "lat": 27.5273, "lon": -82.7154, "nws_station": "KSRQ", "shark_teeth": False},
+    "holmes": {"name": "Holmes Beach", "mote_id": "5", "tide_id": "8726243", "county": "Manatee", "lat": 27.4984, "lon": -82.7126, "nws_station": "KSRQ", "shark_teeth": False},
     "st-pete": {"name": "St. Pete Beach", "mote_id": "42", "tide_id": "8726520", "county": "Pinellas", "lat": 27.7253, "lon": -82.7412, "nws_station": "KSPG", "shark_teeth": False},
     "clearwater": {"name": "Clearwater Beach", "mote_id": "45", "tide_id": "8726724", "county": "Pinellas", "lat": 27.9781, "lon": -82.8317, "nws_station": "KPIE", "shark_teeth": False},
     "indian-rocks": {"name": "Indian Rocks Beach", "mote_id": "46", "tide_id": "8726724", "county": "Pinellas", "lat": 27.8931, "lon": -82.8482, "nws_station": "KPIE", "shark_teeth": False},
@@ -951,6 +953,31 @@ def _get_water_temp(config: dict, modeled_sst_f: Optional[float]) -> tuple[str, 
         return str(modeled_sst_f), "Open-Meteo modeled nearshore"
     return "--", "Unavailable"
 
+def _fetch_noaa_tide_predictions(station_id: str, begin_date: str, range_hours: int = 48) -> list:
+    url = (
+        f"https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date={begin_date}"
+        f"&range={range_hours}&station={station_id}&product=predictions&datum=MLLW"
+        "&time_zone=lst_ldt&interval=hilo&units=english&format=json"
+    )
+    last_err = None
+    for attempt in range(3):
+        try:
+            payload = requests.get(url, timeout=12).json()
+            if payload.get("error"):
+                last_err = payload["error"]
+                break
+            preds = payload.get("predictions", [])
+            if preds:
+                return preds
+            last_err = "empty predictions"
+        except Exception as e:
+            last_err = e
+            if attempt < 2:
+                continue
+    if last_err:
+        print(f"[WARN] NOAA tides {station_id}: {last_err}")
+    return []
+
 def _get_tide_data(config: dict, modeled_sst_f: Optional[float] = None):
     water_temp, water_temp_source = _get_water_temp(config, modeled_sst_f)
     station_info = NOAA_STATIONS.get(config['tide_id'], {"lat": config['lat'], "lon": config['lon']})
@@ -967,23 +994,19 @@ def _get_tide_data(config: dict, modeled_sst_f: Optional[float] = None):
     try:
         now = _fl_now()
         begin = now.strftime("%Y%m%d")
-        url = (
-            f"https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date={begin}&range=48"
-            f"&station={config['tide_id']}&product=predictions&datum=MLLW&time_zone=lst_ldt"
-            "&interval=hilo&units=english&format=json"
-        )
-        payload = requests.get(url, timeout=8).json()
-        if payload.get("error"):
-            print(f"[WARN] NOAA tides {config['tide_id']}: {payload['error']}")
-            return fallback
-        preds = payload.get("predictions", [])
+        preds = _fetch_noaa_tide_predictions(config["tide_id"], begin, range_hours=48)
+        if not preds:
+            yesterday = (now - datetime.timedelta(days=1)).strftime("%Y%m%d")
+            preds = _fetch_noaa_tide_predictions(config["tide_id"], yesterday, range_hours=96)
         if not preds:
             return fallback
 
         now_str = now.strftime("%Y-%m-%d %H:%M")
         future = [p for p in preds if p["t"] >= now_str]
         if not future:
-            future = preds[:3]
+            future = [p for p in preds if p["t"] >= (now - datetime.timedelta(hours=2)).strftime("%Y-%m-%d %H:%M")][-3:]
+        if not future:
+            future = preds[-3:]
 
         next_tide = future[0]
         next_type = "High" if next_tide["type"] == "H" else "Low"

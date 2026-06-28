@@ -1,17 +1,19 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Map, { Marker, NavigationControl, Source, Layer } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { 
-  Waves, Thermometer, Wind, Eye, Droplets, AlertTriangle, 
-  Ship, Info, Calendar, Search, Map as MapIcon, Menu, X, 
-  Navigation, Footprints, Anchor, Sun, ShieldCheck, MapPin, 
-  MessageSquare, Send, Sparkles, Activity, Palette, Leaf, Moon, Star, CloudSun, Navigation2,
+  Waves, Thermometer, Eye, Droplets, AlertTriangle, 
+  Ship, Calendar, Search, Menu, X, 
+  Activity, Palette, Leaf, Moon, CloudSun, Navigation2,
   TrendingUp, TrendingDown, Flag, Radar
 } from 'lucide-react';
+import InstallPrompt from './InstallPrompt';
 
 // --- CONFIGURATION ---
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
-const API_BASE = import.meta.env.VITE_API_BASE || `http://${window.location.hostname}:8000/api`;
+const API_BASE = import.meta.env.VITE_API_BASE || (
+  import.meta.env.PROD ? '/api' : `http://${window.location.hostname}:8000/api`
+);
 const REFRESH_MS = 5 * 60 * 1000; // match backend sync interval
 
 interface Beach { id: string; name: string; lat: number; lon: number; color?: string; }
@@ -107,6 +109,7 @@ function App() {
 
   return (
     <div className="dashboard-container">
+      <InstallPrompt />
       {sidebarOpen && window.innerWidth <= 1024 && (
         <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)}></div>
       )}

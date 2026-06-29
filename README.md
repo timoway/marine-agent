@@ -52,9 +52,11 @@ gemini mcp add marine-agent --command "python3" --path "$(pwd)/marine_server.py"
 
 ## Roadmap
 
+See **[plan.md](./plan.md)** for full session handoff and priorities.
+
 - [ ] In-app chat ("best paddle near Venice today?")
-- [ ] `when=tomorrow` ranking
-- [ ] Saved home beach
+- [x] `when=tomorrow` ranking + tomorrow outlook
+- [x] Saved home beach
 - [ ] Atlantic coast expansion
 
 ## License

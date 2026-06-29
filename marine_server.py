@@ -1,4 +1,5 @@
 import os
+import re
 import datetime
 import math
 from io import BytesIO
@@ -97,6 +98,89 @@ def _format_time_12h(dt: datetime.datetime) -> str:
     hour = dt.hour % 12 or 12
     suffix = "AM" if dt.hour < 12 else "PM"
     return f"{hour}:{dt.minute:02d} {suffix}"
+
+def _format_hour_short(dt: datetime.datetime) -> str:
+    hour = dt.hour % 12 or 12
+    suffix = "AM" if dt.hour < 12 else "PM"
+    return f"{hour} {suffix}"
+
+def _time_of_day_bucket(hour: int) -> str:
+    if 5 <= hour < 12:
+        return "morning"
+    if 12 <= hour < 18:
+        return "afternoon"
+    if 18 <= hour < 22:
+        return "evening"
+    return "overnight"
+
+def _verdict_title(bucket: str) -> str:
+    if bucket in ("evening", "overnight"):
+        return "Tonight's outlook"
+    return "Today's outlook"
+
+def _plan_panel_label(bucket: str) -> str:
+    return {
+        "morning": "Plan for today",
+        "afternoon": "Plan for later",
+        "evening": "Plan for tonight",
+        "overnight": "Plan for overnight",
+    }[bucket]
+
+def _storm_timing_label(bucket: str, when: str) -> str:
+    if when == "now":
+        return {
+            "morning": "this morning",
+            "afternoon": "this afternoon",
+            "evening": "tonight",
+            "overnight": "overnight",
+        }[bucket]
+    return {
+        "morning": "this afternoon",
+        "afternoon": "tonight",
+        "evening": "later tonight",
+        "overnight": "overnight",
+    }[bucket]
+
+def _extract_before_time(text: str) -> Optional[str]:
+    match = re.search(r"before\s+(\d{1,2})\s*(am|pm)", (text or "").lower())
+    if not match:
+        return None
+    hour, suffix = match.groups()
+    return f"before {int(hour)} {suffix.upper()}"
+
+def _storm_chance_reason(likelihood: str, bucket: str, when: str, forecast_text: str = "") -> str:
+    timing = _extract_before_time(forecast_text)
+    if timing and when == "now" and bucket in ("evening", "overnight"):
+        prefix = "Storms likely" if likelihood == "likely" else "Chance of showers and thunderstorms"
+        return f"{prefix} {timing}"
+    window = _storm_timing_label(bucket, when)
+    if likelihood == "likely":
+        return f"Storms likely {window}"
+    if likelihood == "active":
+        return f"Storm risk building toward {window}"
+    if likelihood == "chance":
+        return f"Showers or storms possible {window}"
+    return f"Favorable conditions expected {window}"
+
+def _period_relevance(name: str, hour: int) -> str:
+    n = (name or "").lower()
+    if "tonight" in n or "this evening" in n:
+        return "now" if hour >= 18 else "later"
+    if "overnight" in n:
+        return "now" if hour >= 22 or hour < 5 else "later"
+    if "afternoon" in n:
+        if hour < 12:
+            return "later"
+        if hour < 18:
+            return "now"
+        return "skip"
+    if "morning" in n:
+        return "now" if hour < 12 else "skip"
+    if n == "today":
+        return "now" if hour < 18 else "skip"
+    if "tomorrow" in n:
+        return "later"
+    return "now" if hour >= 12 else "later"
 
 def calculate_relative_position(lat1: float, lon1: float, lat2: float, lon2: float) -> str:
     d = distance_miles(lat1, lon1, lat2, lon2)
@@ -287,27 +371,48 @@ def _analyze_hourly(hourly_periods: list) -> dict:
 
     max_pop = 0
     now_likelihood = "none"
-    summaries = []
-    for period in window:
+    hourly_lines = []
+    for period in window[:3]:
         pop = period.get("probabilityOfPrecipitation", {}).get("value")
         if pop is not None:
             max_pop = max(max_pop, int(pop))
         short_fc = period.get("shortForecast", "")
-        summaries.append(f"{period.get('startTime', '')[:16]}: {short_fc} ({pop or 0}% PoP)")
+        try:
+            start = datetime.datetime.fromisoformat(period["startTime"])
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=FL_TZ)
+            time_label = _format_hour_short(start)
+        except (KeyError, ValueError, TypeError):
+            time_label = ""
+        rain_chance = int(pop) if pop is not None else None
+        hourly_lines.append({
+            "time": time_label,
+            "forecast": short_fc,
+            "rain_chance": rain_chance,
+        })
         lvl = _pop_to_likelihood(pop, short_fc)
         if period is current or period in next_hours[:2]:
             now_likelihood = _max_likelihood(now_likelihood, lvl)
+
+    summary_parts = []
+    for line in hourly_lines:
+        part = f"{line['time']}: {line['forecast']}" if line["time"] else line["forecast"]
+        if line["rain_chance"] is not None and line["rain_chance"] > 0:
+            part += f" ({line['rain_chance']}% chance of rain)"
+        summary_parts.append(part)
 
     return {
         "now_likelihood": now_likelihood,
         "max_pop": max_pop,
         "current_short": current.get("shortForecast", "") if current else "",
-        "summary": "; ".join(summaries[:3]),
+        "hourly_lines": hourly_lines,
+        "summary": "; ".join(summary_parts),
     }
 
 def _analyze_weather_situation(forecast: dict) -> dict:
     now = _fl_now()
     hour = now.hour
+    time_bucket = _time_of_day_bucket(hour)
     periods = forecast.get("periods", [])
     hazards = forecast.get("hazards", {})
     active_alerts = forecast.get("active_alerts", [])
@@ -342,31 +447,26 @@ def _analyze_weather_situation(forecast: dict) -> dict:
 
     current_text = ""
     later_text = ""
+    current_period_name = ""
     for i, period in enumerate(periods[:4]):
-        name = period.get("name", "").lower()
+        name = period.get("name", "")
         text = period.get("detailedForecast", "")
         full = f"{name} {text}"
-        if "afternoon" in name:
-            if hour < 12:
-                later_text += f" {full}"
-            else:
-                current_text += f" {full}"
-        elif "morning" in name or name == "today":
-            if hour < 12:
-                current_text += f" {full}"
-            else:
-                later_text += f" {full}"
-        elif "tonight" in name or "evening" in name:
+        relevance = _period_relevance(name, hour)
+        if relevance == "skip":
+            continue
+        if relevance == "now":
+            current_text += f" {full}"
+            if not current_period_name:
+                current_period_name = name
+        else:
             later_text += f" {full}"
-        elif i == 0:
-            if hour < 12 and "afternoon" in text.lower():
-                current_text += f" {name}"
-                later_text += f" {text}"
-            else:
-                current_text += f" {full}"
+        if i == 0 and not current_period_name and relevance == "now":
+            current_period_name = name
 
     if not current_text.strip() and periods:
         current_text = periods[0].get("detailedForecast", "")
+        current_period_name = periods[0].get("name", "")
     if not later_text.strip() and len(periods) > 1:
         later_text = periods[1].get("detailedForecast", "")
 
@@ -395,14 +495,19 @@ def _analyze_weather_situation(forecast: dict) -> dict:
 
     return {
         "hour": hour,
+        "time_bucket": time_bucket,
+        "verdict_title": _verdict_title(time_bucket),
+        "plan_label": _plan_panel_label(time_bucket),
         "advisory_level": advisory_level,
         "advisory_reason": advisory_reason,
         "now_likelihood": now_likelihood,
         "later_likelihood": later_likelihood,
         "forecast_headline": summary,
+        "current_forecast_text": current_text.strip(),
         "hourly_summary": hourly.get("summary", ""),
+        "hourly_lines": hourly.get("hourly_lines", []),
         "hourly_max_pop": hourly.get("max_pop", 0),
-        "current_period": periods[0].get("name", "") if periods else "",
+        "current_period": current_period_name or (periods[0].get("name", "") if periods else ""),
         "active_alerts": active_alerts,
         "radar_proximity": radar_proximity,
     }
@@ -431,30 +536,31 @@ def _forecast_plan_status(situation: dict) -> tuple[str, str]:
 
     now_lvl = situation["now_likelihood"]
     later_lvl = situation["later_likelihood"]
-    hour = situation["hour"]
+    bucket = situation.get("time_bucket", _time_of_day_bucket(situation["hour"]))
+    forecast_text = f"{situation.get('current_forecast_text', '')} {situation.get('forecast_headline', '')}"
 
     if now_lvl in ("severe", "active"):
         return "Red", "Storms active or imminent right now"
     if now_lvl == "likely":
-        return "Red", "Storms likely in the current period"
+        return "Red", _storm_chance_reason("likely", bucket, "now", forecast_text)
 
-    if hour < 12:
+    if bucket == "morning":
         if later_lvl == "likely":
             return "Yellow", "Storms likely this afternoon — best window is this morning"
         if later_lvl == "chance":
-            return "Green", "Good conditions now — storms possible this afternoon"
+            return "Green", "Good conditions now — showers or storms possible this afternoon"
         if later_lvl == "active":
-            return "Yellow", "Storm risk building toward afternoon"
+            return "Yellow", _storm_chance_reason("active", bucket, "later", forecast_text)
         return "Green", "Favorable conditions expected today"
 
-    if now_lvl == "likely":
-        return "Yellow", "Storms likely this afternoon"
     if now_lvl == "chance":
-        return "Yellow", "Storms possible this afternoon"
+        return "Yellow", _storm_chance_reason("chance", bucket, "now", forecast_text)
     if later_lvl in ("likely", "active"):
-        return "Yellow", "Storms possible later today"
+        return "Yellow", _storm_chance_reason(later_lvl, bucket, "later", forecast_text)
     if later_lvl == "chance":
-        return "Yellow", "Isolated storms possible later"
+        return "Yellow", _storm_chance_reason("chance", bucket, "later", forecast_text)
+    if bucket in ("evening", "overnight"):
+        return "Green", "Conditions look favorable for the rest of tonight"
     return "Green", "Conditions look favorable for the rest of today"
 
 def _physical_activity_status(activity: str, wave_ft: float, wind_mph: float, red_tide: str) -> tuple[str, str]:
@@ -486,26 +592,25 @@ def _forecast_activity_status(activity: str, situation: dict) -> tuple[str, str]
 
     now_lvl = situation["now_likelihood"]
     later_lvl = situation["later_likelihood"]
-    hour = situation["hour"]
+    bucket = situation.get("time_bucket", _time_of_day_bucket(situation["hour"]))
+    forecast_text = f"{situation.get('current_forecast_text', '')} {situation.get('forecast_headline', '')}"
 
     if now_lvl in ("severe", "active", "likely"):
         return "Red", "Storms in the current period"
 
-    if hour < 12:
+    if bucket == "morning":
         if later_lvl == "likely":
-            return "Yellow", "Storms likely this afternoon"
+            return "Yellow", _storm_chance_reason("likely", bucket, "later", forecast_text)
         if later_lvl == "chance":
             return "Green", "Morning window before possible afternoon storms"
         return "Green", "No significant storm risk forecast"
 
-    if now_lvl == "likely":
-        return "Yellow", "Storms likely this afternoon"
     if now_lvl == "chance":
-        return "Yellow", "Storms possible this afternoon"
+        return "Yellow", _storm_chance_reason("chance", bucket, "now", forecast_text)
     if later_lvl in ("likely", "active"):
-        return "Yellow", "Storms possible later today"
+        return "Yellow", _storm_chance_reason(later_lvl, bucket, "later", forecast_text)
     if later_lvl == "chance":
-        return "Yellow", "Isolated storms possible later"
+        return "Yellow", _storm_chance_reason("chance", bucket, "later", forecast_text)
     return "Green", "No significant storm risk forecast"
 
 def _build_activities(situation: dict, wave_ft: float, wind_mph: float, red_tide: str) -> dict:
@@ -581,6 +686,8 @@ def _build_outlook(flag: dict, wave_ft: float, wind_mph: float, red_tide: str, m
     return {
         **flag,
         "reason": official_reason,
+        "verdict_title": situation.get("verdict_title", "Today's outlook"),
+        "plan_label": situation.get("plan_label", "Plan for today"),
         "water_now": {
             "label": flag["label"],
             "vibe": flag["vibe"],
@@ -593,6 +700,7 @@ def _build_outlook(flag: dict, wave_ft: float, wind_mph: float, red_tide: str, m
             "headline": plan_reason,
             "forecast": situation["forecast_headline"],
             "hourly": situation.get("hourly_summary", ""),
+            "hourly_lines": situation.get("hourly_lines", []),
         },
         "verdict": verdict,
         "activities": activities,

@@ -85,8 +85,17 @@ interface MarineData {
     vibe: string; 
     reason: string; 
     color: string;
+    verdict_title?: string;
+    plan_label?: string;
     water_now?: { label: string; vibe: string; color: string; summary: string; };
-    plan_today?: { status: string; color: string; headline: string; forecast: string; hourly?: string; };
+    plan_today?: {
+      status: string;
+      color: string;
+      headline: string;
+      forecast: string;
+      hourly?: string;
+      hourly_lines?: { time: string; forecast: string; rain_chance: number | null; }[];
+    };
     verdict?: { headline: string; status: string; color: string; reason: string; };
     activities: {
       paddling: { status: string; reason: string; } | string;
@@ -526,7 +535,7 @@ function App() {
 
             <div className="grid">
               <div className="card hero-card" style={{ borderLeft: `6px solid ${data.outlook?.verdict?.color ?? data.outlook?.color ?? '#3b82f6'}` }}>
-                <div className="card-title"><Calendar size={18} /> Today&apos;s Verdict</div>
+                <div className="card-title"><Calendar size={18} /> {data.outlook?.verdict_title ?? "Today's outlook"}</div>
                 <div className="card-value hero-value">{data.outlook?.verdict?.headline ?? data.outlook?.label ?? '--'}</div>
                 <div className="card-subvalue reason-text">{data.outlook?.verdict?.reason ?? data.outlook?.reason ?? '--'}</div>
 
@@ -540,7 +549,7 @@ function App() {
                     <span className="outlook-panel-note">Official beach flag</span>
                   </div>
                   <div className="outlook-panel" style={{ borderColor: data.outlook?.plan_today?.color ?? '#64748b' }}>
-                    <span className="outlook-panel-label">Plan today</span>
+                    <span className="outlook-panel-label">{data.outlook?.plan_label ?? 'Plan for today'}</span>
                     <span className="outlook-panel-value" style={{ color: data.outlook?.plan_today?.color ?? '#94a3b8' }}>
                       {data.outlook?.plan_today?.status ?? '--'}
                     </span>
@@ -548,9 +557,26 @@ function App() {
                     {data.outlook?.plan_today?.forecast && (
                       <span className="outlook-panel-note">{data.outlook.plan_today.forecast}</span>
                     )}
-                    {data.outlook?.plan_today?.hourly && (
-                      <span className="outlook-panel-note">Next hours: {data.outlook.plan_today.hourly}</span>
-                    )}
+                    {data.outlook?.plan_today?.hourly_lines && data.outlook.plan_today.hourly_lines.length > 0 ? (
+                      <div className="hourly-forecast">
+                        <span className="outlook-panel-note hourly-forecast-label">Next few hours</span>
+                        <ul className="hourly-forecast-list">
+                          {data.outlook.plan_today.hourly_lines.map((line, i) => (
+                            <li key={i} className="hourly-forecast-item">
+                              <span className="hourly-forecast-time">{line.time}</span>
+                              <span className="hourly-forecast-desc">
+                                {line.forecast}
+                                {line.rain_chance != null && line.rain_chance > 0 && (
+                                  <span className="hourly-forecast-rain"> ({line.rain_chance}% chance of rain)</span>
+                                )}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : data.outlook?.plan_today?.hourly ? (
+                      <span className="outlook-panel-note">Next few hours: {data.outlook.plan_today.hourly}</span>
+                    ) : null}
                     {data.outlook?.radar_proximity?.storm_nearby && (
                       <span className="outlook-panel-note">
                         Radar: {data.outlook.radar_proximity.max_dbz} dBZ within {data.outlook.radar_proximity.radius_miles} mi

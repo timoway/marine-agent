@@ -716,6 +716,43 @@ body {
   line-height: 1.35;
 }
 
+.hourly-forecast {
+  margin-top: 4px;
+}
+
+.hourly-forecast-label {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.hourly-forecast-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hourly-forecast-item {
+  display: flex;
+  gap: 6px;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: #64748b;
+}
+
+.hourly-forecast-time {
+  flex-shrink: 0;
+  min-width: 2.5rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.hourly-forecast-rain {
+  color: #64748b;
+}
+
 .active-alerts {
   margin-top: 14px;
   padding: 10px 12px;

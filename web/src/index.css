@@ -1148,7 +1148,16 @@ body {
   .divider { display: none; }
 }
 
-.loading-spinner { display: flex; justify-content: center; align-items: center; min-height: 400px; }
+.loading-spinner,
+.map-loading {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  flex: 1;
+}
+
 .spinner { font-size: 50px; animation: wave 2s infinite ease-in-out; }
 @keyframes wave { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
 

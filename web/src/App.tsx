@@ -1,23 +1,22 @@
-import { useState, useEffect, useMemo } from 'react';
-import 'mapbox-gl/dist/mapbox-gl.css';
+import { lazy, Suspense, useState, useEffect, useMemo } from 'react';
 import { 
   Waves, Thermometer, Eye, Droplets, AlertTriangle, 
   Ship, Calendar, Search, Menu, X, LayoutDashboard, Map as MapIcon,
   Activity, Palette, Leaf, Moon, CloudSun, Navigation2,
-  TrendingUp, TrendingDown, Flag, Radar, ChevronRight, Footprints, Zap, Home
+  TrendingUp, TrendingDown, Flag, ChevronRight, Footprints, Zap, Home
 } from 'lucide-react';
-import MapGL, { Marker, NavigationControl, Source, Layer } from 'react-map-gl/mapbox';
 import InstallPrompt from './InstallPrompt';
+import ErrorBoundary from './ErrorBoundary';
 import { apiFetch, waitForApiReady } from './api';
 import { useMediaQuery } from './useMediaQuery';
 import { formatFloridaTime } from './format';
+import type { Beach } from './types';
+
+const BeachMap = lazy(() => import('./BeachMap'));
 
 // --- CONFIGURATION ---
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
 const REFRESH_MS = 5 * 60 * 1000; // match backend sync interval
 const RADAR_REFRESH_MS = 60 * 1000;
-
-interface Beach { id: string; name: string; lat: number; lon: number; color?: string; storm_badge?: boolean; radar_nearby?: boolean; }
 
 type RankActivity = 'paddling' | 'swimming' | 'beach';
 
@@ -492,72 +491,27 @@ function App() {
             <button onClick={() => window.location.reload()} className="retry-btn">Retry</button>
           </div>
         ) : viewMode === 'map' ? (
-          <div className="map-container-fixed" style={{ position: 'relative' }}>
-             {/* Radar Toggle Overlay */}
-             <button 
-               className={`radar-toggle ${showRadar ? 'active' : ''}`}
-               onClick={() => setShowRadar(!showRadar)}
-               title="Toggle NWS Weather Radar"
-             >
-               <Radar size={20} />
-               <span>RADAR</span>
-             </button>
-
-             <p className="map-hint">Tap any flag for beach conditions</p>
-             <MapGL
-               initialViewState={mapFocus}
-               onMove={(evt) => setMapZoom(evt.viewState.zoom)}
-               style={{ width: '100%', height: '100%' }}
-               mapStyle="mapbox://styles/mapbox/navigation-night-v1"
-               mapboxAccessToken={MAPBOX_TOKEN}
-             >
-               <NavigationControl position="top-right" />
-               
-               {showRadar && (
-                 <Source
-                   id="nws-radar"
-                   type="raster"
-                   tiles={['https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/{z}/{x}/{y}.png']}
-                   tileSize={256}
-                 >
-                   <Layer
-                     id="radar-layer"
-                     type="raster"
-                     paint={{ 'raster-opacity': 0.6 }}
-                   />
-                 </Source>
-               )}
-
-               {beaches.map(beach => (
-                 <Marker
-                   key={beach.id}
-                   latitude={beach.lat}
-                   longitude={beach.lon}
-                   anchor="bottom"
-                   onClick={e => {
-                     e.originalEvent.stopPropagation();
-                     selectBeach(beach.id);
-                   }}
-                 >
-                    <div className={`map-marker-pulse ${selectedBeach === beach.id ? 'selected' : ''} ${beach.radar_nearby && !beach.storm_badge ? 'radar-nearby' : ''}`}>
-                      {mapZoom >= 9 && (
-                        <div className="marker-name-label">{beach.name}</div>
-                      )}
-                      {beach.storm_badge && (
-                        <div className="marker-storm-badge" title="NWS weather warning active">
-                          <Zap size={11} fill="#0f172a" stroke="#0f172a" />
-                        </div>
-                      )}
-                      <div className="pulse-ring" style={{ backgroundColor: `${beach.color}44` }}></div>
-                      <div className="pulse-dot" style={{ backgroundColor: beach.color }}></div>
-                      <div className="marker-label-flag" style={{ backgroundColor: beach.color }}>
-                         <Flag size={14} fill="#0f172a" stroke="#0f172a" />
-                      </div>
-                    </div>
-                 </Marker>
-               ))}
-             </MapGL>
-          </div>
+          <ErrorBoundary
+            title="Map unavailable"
+            message="The map could not load. You can still use the dashboard, or reload to try again."
+          >
+            <Suspense fallback={
+              <div className="map-loading">
+                <div className="spinner">🗺️</div>
+              </div>
+            }>
+              <BeachMap
+                beaches={beaches}
+                selectedBeach={selectedBeach}
+                selectBeach={selectBeach}
+                mapFocus={mapFocus}
+                mapZoom={mapZoom}
+                setMapZoom={setMapZoom}
+                showRadar={showRadar}
+                setShowRadar={setShowRadar}
+              />
+            </Suspense>
+          </ErrorBoundary>
         ) : loading ? (
           <div className="loading-spinner">
             <div className="spinner">🌊</div>

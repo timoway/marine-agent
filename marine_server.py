@@ -18,6 +18,8 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 import uvicorn
 from astral.moon import phase
 
+import cache_store
+
 print("[STARTUP] marine_server.py loading...")
 
 # --- CONFIGURATION ---
@@ -30,6 +32,70 @@ def _fl_now() -> datetime.datetime:
 
 # --- CACHING & PERFORMANCE ---
 GLOBAL_DATA_STORE: Dict[str, dict] = {}
+SAFETY_DISCLAIMER = (
+    "Advisory only — verify official beach flags, lifeguards, and NWS alerts before entering the water."
+)
+FWC_HAB_URL = (
+    "https://atoll.floridamarine.org/arcgis/rest/services/Projects_FWC/HAB_Current/FeatureServer/0/query"
+)
+DATA_STALE_SECONDS = 300
+
+
+def _source_meta(ok: bool, source_url: str = "", error: Optional[str] = None) -> dict:
+    meta = {
+        "fetched_at": _fl_now().isoformat(),
+        "ok": ok,
+        "stale": False,
+        "source_url": source_url,
+    }
+    if error:
+        meta["error"] = error
+    return meta
+
+
+def _red_tide_status_str(red_tide) -> str:
+    if isinstance(red_tide, dict):
+        return red_tide.get("status", "Unknown")
+    return red_tide or "Unknown"
+
+
+def _collect_unknown_sources(data: dict) -> List[str]:
+    unknown = []
+    checks = (
+        ("red_tide", data.get("red_tide", {})),
+        ("weather", data.get("weather", {})),
+        ("forecast", data.get("forecast", {})),
+        ("tides", data.get("tides", {})),
+        ("mote", data.get("mote_extras", {})),
+    )
+    for name, block in checks:
+        meta = block.get("meta", {}) if isinstance(block, dict) else {}
+        if meta and not meta.get("ok", True):
+            unknown.append(name)
+    red_status = _red_tide_status_str(data.get("red_tide", {}))
+    if red_status == "Unknown" and "red_tide" not in unknown:
+        unknown.append("red_tide")
+    return unknown
+
+
+def _build_data_quality(data: dict, *, from_redis: bool = False) -> dict:
+    age = _cache_age_seconds(data)
+    unknown_sources = _collect_unknown_sources(data)
+    return {
+        "unknown_sources": unknown_sources,
+        "has_unknowns": len(unknown_sources) > 0,
+        "stale": age > DATA_STALE_SECONDS,
+        "age_seconds": round(age, 1),
+        "disclaimer": SAFETY_DISCLAIMER,
+        "cached_from_redis": from_redis,
+    }
+
+
+def _store_beach_data(beach_id: str, data: dict) -> dict:
+    data["data_quality"] = _build_data_quality(data)
+    GLOBAL_DATA_STORE[beach_id] = data
+    cache_store.write_beach(beach_id, data)
+    return data
 
 # --- DATA: STATIONS & BEACHES (SWFL + extended) ---
 NOAA_STATIONS = {
@@ -193,9 +259,11 @@ def calculate_relative_position(lat1: float, lon1: float, lat2: float, lon2: flo
     return f"{d:.1f} miles {cardinal}"
 
 def calculate_flag(wave_ft: float, wind_mph: float, red_tide_status: str, jellyfish_detected: bool) -> dict:
+    if red_tide_status == "Unknown":
+        return {"label": "YELLOW FLAG", "vibe": "Data Incomplete", "color": "#facc15"}
     if red_tide_status == "Medium/High" or wave_ft > 6.0:
         return {"label": "DOUBLE RED", "vibe": "Water Closed", "color": "#7f1d1d"}
-    if wave_ft > 4.0 or wind_mph > 25 or red_tide_status != "Not Present":
+    if wave_ft > 4.0 or wind_mph > 25 or red_tide_status not in ("Not Present", "Unknown"):
         return {"label": "RED FLAG", "vibe": "High Hazard", "color": "#f87171"}
     if jellyfish_detected:
         return {"label": "PURPLE FLAG", "vibe": "Stinging Life", "color": "#a855f7"}
@@ -660,6 +728,8 @@ def _forecast_plan_status(situation: dict) -> tuple[str, str]:
     return "Green", "Conditions look favorable for the rest of today"
 
 def _physical_activity_status(activity: str, wave_ft: float, wind_mph: float, red_tide: str) -> tuple[str, str]:
+    if red_tide == "Unknown":
+        return "Yellow", "Red tide data unavailable — check FWC before going out"
     if activity == "paddling":
         if wind_mph > 15 or wave_ft > 2.5:
             return "Red", f"High wind ({wind_mph} mph) or surf ({wave_ft:.1f} ft)"
@@ -839,7 +909,8 @@ def _build_outlook(
     return outlook
 
 def _has_red_tide(data: dict) -> bool:
-    return data.get("red_tide", {}).get("status", "Not Present") != "Not Present"
+    status = _red_tide_status_str(data.get("red_tide", {}))
+    return status not in ("Not Present", "Unknown")
 
 def _has_purple_hazard(data: dict) -> bool:
     outlook = data.get("outlook", {})
@@ -906,8 +977,10 @@ def _rank_summary(data: dict, activity: str, when: str = "today") -> str:
         parts.append(f"{data.get('surf', {}).get('tomorrow_height', data.get('surf', {}).get('height', '--'))} ft surf (forecast)")
     else:
         parts.append(f"{data.get('surf', {}).get('height', '--')} ft surf")
-    red_tide = data.get("red_tide", {}).get("status", "Not Present")
-    if red_tide != "Not Present":
+    red_tide = _red_tide_status_str(data.get("red_tide", {}))
+    if red_tide == "Unknown":
+        parts.append("red tide data unavailable")
+    elif red_tide != "Not Present":
         parts.append(f"red tide ({red_tide})")
     if _has_purple_hazard(data):
         parts.append("purple flag / stinging life")
@@ -1033,8 +1106,8 @@ def get_beach_key(beach_name: str) -> Optional[str]:
 
 # --- FETCHERS (public APIs, resilient) ---
 def _get_mote_report(config: dict) -> dict:
+    url = f"https://visitbeaches.org/api/reports?locationId={config['mote_id']}&latest=true"
     try:
-        url = f"https://visitbeaches.org/api/reports?locationId={config['mote_id']}&latest=true"
         r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5).json()
         if isinstance(r, list) and len(r) > 0:
             report = r[0]
@@ -1044,27 +1117,58 @@ def _get_mote_report(config: dict) -> dict:
                 "water": "Clear Water" if report.get("waterColor") == "Clear" else report.get("waterColor", "Greenish Blue"),
                 "algae": "No Algae Observed" if report.get("driftAlgae") == "None" else "Algae Present",
                 "algae_type": report.get("driftAlgaeType", "N/A"),
-                "jellyfish": report.get("jellyfish", "None")
+                "jellyfish": report.get("jellyfish", "None"),
+                "meta": _source_meta(True, url),
             }
-    except Exception:
-        pass
-    return {"intensity": "Light", "type": "Wind Swell", "water": "Clear Water", "algae": "No Algae Observed", "algae_type": "N/A", "jellyfish": "None"}
+    except Exception as exc:
+        return {
+            "intensity": "Unknown",
+            "type": "Unknown",
+            "water": "Unknown",
+            "algae": "Unknown",
+            "algae_type": "N/A",
+            "jellyfish": "Unknown",
+            "meta": _source_meta(False, url, str(exc)[:120]),
+        }
+    return {
+        "intensity": "Unknown",
+        "type": "Unknown",
+        "water": "Unknown",
+        "algae": "Unknown",
+        "algae_type": "N/A",
+        "jellyfish": "Unknown",
+        "meta": _source_meta(False, url, "empty report"),
+    }
 
-def _get_red_tide_status(config: dict) -> str:
+def _get_red_tide_status(config: dict) -> dict:
+    params = {
+        "where": f"County = '{config['county']}'",
+        "outFields": "Count_",
+        "orderByFields": "SampleDate DESC",
+        "resultRecordCount": 1,
+        "f": "json",
+    }
     try:
-        url = "https://atoll.floridamarine.org/arcgis/rest/services/Projects_FWC/HAB_Current/FeatureServer/0/query"
-        params = {"where": f"County = '{config['county']}'", "outFields": "Count_", "orderByFields": "SampleDate DESC", "resultRecordCount": 1, "f": "json"}
-        r = requests.get(url, params=params, timeout=8).json()
+        r = requests.get(FWC_HAB_URL, params=params, timeout=8).json()
         feat = r.get('features', [])
         if feat:
             cnt = feat[0]['attributes']['Count_']
             if cnt > 100000:
-                return "Medium/High"
+                status = "Medium/High"
             elif cnt > 10000:
-                return "Low"
-    except Exception:
-        pass
-    return "Not Present"
+                status = "Low"
+            else:
+                status = "Not Present"
+            return {"status": status, "meta": _source_meta(True, FWC_HAB_URL)}
+    except Exception as exc:
+        return {
+            "status": "Unknown",
+            "meta": _source_meta(False, FWC_HAB_URL, str(exc)[:120]),
+        }
+    return {
+        "status": "Unknown",
+        "meta": _source_meta(False, FWC_HAB_URL, "no county sample returned"),
+    }
 
 def _describe_wave_period(period: Optional[float]) -> str:
     if period is None or period <= 0:
@@ -1127,20 +1231,32 @@ def _get_marine_data(config: dict):
     except Exception:
         return 0.5, 4.0, None
 
-def _get_nws_obs(config: dict):
+def _get_nws_obs(config: dict) -> dict:
+    url = f"https://api.weather.gov/stations/{config['nws_station']}/observations/latest"
     try:
-        url = f"https://api.weather.gov/stations/{config['nws_station']}/observations/latest"
         r = requests.get(url, headers={'User-Agent': 'MarineAgent/1.0'}, timeout=5).json()
         p = r.get('properties', {})
         raw_temp = p.get('temperature', {}).get('value')
-        temp_f = round((raw_temp * 9/5) + 32, 1) if raw_temp is not None else 75.0
+        temp_f = round((raw_temp * 9/5) + 32, 1) if raw_temp is not None else None
         raw_wind = p.get('windSpeed', {}).get('value')
-        wind_mph = round(raw_wind / 1.6, 1) if raw_wind is not None else 8.0
+        wind_mph = round(raw_wind / 1.6, 1) if raw_wind is not None else None
         wind_deg = p.get('windDirection', {}).get('value', 0)
         wind_dir = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][round((wind_deg or 0) / 45) % 8]
-        return temp_f, wind_mph, wind_dir
-    except Exception:
-        return 75.0, 8.0, "N/A"
+        if temp_f is None or wind_mph is None:
+            raise ValueError("incomplete observation")
+        return {
+            "temp_f": temp_f,
+            "wind_mph": wind_mph,
+            "wind_dir": wind_dir,
+            "meta": _source_meta(True, url),
+        }
+    except Exception as exc:
+        return {
+            "temp_f": None,
+            "wind_mph": None,
+            "wind_dir": "N/A",
+            "meta": _source_meta(False, url, str(exc)[:120]),
+        }
 
 STORM_ALERT_EVENTS = frozenset({
     "Special Marine Warning",
@@ -1222,16 +1338,19 @@ def _get_nws_forecast(config: dict):
             "hourly_periods": hourly_periods,
             "hazards": hazards,
             "active_alerts": active_alerts,
+            "meta": _source_meta(True, points_url),
         }
-    except Exception:
+    except Exception as exc:
+        points_url = f"https://api.weather.gov/points/{config['lat']},{config['lon']}"
         return {
-            "summary": "Forecast intermittent.",
-            "rip_current": "Low Risk",
+            "summary": "Forecast unavailable — check weather.gov.",
+            "rip_current": "Unknown",
             "source": "NWS",
             "periods": [],
             "hourly_periods": [],
             "hazards": _empty_hazards(),
             "active_alerts": [],
+            "meta": _source_meta(False, points_url, str(exc)[:120]),
         }
 
 def _get_water_temp(config: dict, modeled_sst_f: Optional[float]) -> tuple[str, str]:
@@ -1278,6 +1397,7 @@ def _get_tide_data(config: dict, modeled_sst_f: Optional[float] = None):
     water_temp, water_temp_source = _get_water_temp(config, modeled_sst_f)
     station_info = NOAA_STATIONS.get(config['tide_id'], {"lat": config['lat'], "lon": config['lon']})
     dist = calculate_relative_position(station_info["lat"], station_info["lon"], config["lat"], config["lon"])
+    tide_source = f"https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
     fallback = {
         "predictions": [],
         "water_temp": water_temp,
@@ -1286,6 +1406,7 @@ def _get_tide_data(config: dict, modeled_sst_f: Optional[float] = None):
         "trend": "N/A",
         "next_event": "Tides Unavailable",
         "source": f"NOAA {config['tide_id']} ({dist})",
+        "meta": _source_meta(False, tide_source, "tide predictions unavailable"),
     }
     try:
         now = _fl_now()
@@ -1317,6 +1438,7 @@ def _get_tide_data(config: dict, modeled_sst_f: Optional[float] = None):
             "trend": "Rising" if future[0]["type"] == "H" else "Falling",
             "next_event": next_event_string,
             "source": f"NOAA {config['tide_id']} ({dist})",
+            "meta": _source_meta(True, tide_source),
         }
     except Exception as e:
         print(f"[WARN] tide fetch {config.get('name', config['tide_id'])}: {e}")
@@ -1369,9 +1491,16 @@ def _get_daily_outlook(wave_ft: float, wind_mph: float, red_tide: str, mote: dic
             timing = "Perfect full-day window."
     
     reason = f"Gulf conditions with {wave_ft:.1f}ft waves. {timing}"
+    if red_tide == "Unknown":
+        return {
+            "label": "YELLOW FLAG",
+            "vibe": "Data Incomplete",
+            "color": "#facc15",
+            "reason": "Red tide data unavailable — check FWC before entering the water.",
+        }
     if red_tide == "Medium/High" or wave_ft > 6.0:
         return {"label": "DOUBLE RED", "vibe": "Water Closed", "color": "#7f1d1d", "reason": f"High hazard surge or biological risk. {timing}"}
-    if wave_ft > 4.0 or wind_mph > 25 or red_tide != "Not Present":
+    if wave_ft > 4.0 or wind_mph > 25 or red_tide not in ("Not Present", "Unknown"):
         return {"label": "RED FLAG", "vibe": "High Hazard", "color": "#f87171", "reason": f"Dangerous conditions ({wave_ft:.1f}ft waves) or Red Tide. {timing}"}
     if "jellyfish" in str(mote).lower() and "none" not in str(mote).lower():
         return {"label": "PURPLE FLAG", "vibe": "Stinging Life", "color": "#a855f7", "reason": f"Stinging marine life present. {reason}"}
@@ -1416,14 +1545,20 @@ def refresh_one_beach(beach_id: str) -> dict:
     config = BEACH_CONFIG[beach_id]
     try:
         wave_ft, period, sst_f = _get_marine_data(config)
-        temp_f, wind_mph, wind_dir = _get_nws_obs(config)
+        obs = _get_nws_obs(config)
+        temp_f = obs["temp_f"] if obs.get("temp_f") is not None else 75.0
+        wind_mph = obs["wind_mph"] if obs.get("wind_mph") is not None else 15.0
+        wind_dir = obs.get("wind_dir", "N/A")
         mote = _get_mote_report(config)
         red_tide = _get_red_tide_status(config)
+        red_tide_status = _red_tide_status_str(red_tide)
         forecast = _get_nws_forecast(config)
         forecast["radar_proximity"] = _get_radar_proximity(config["lat"], config["lon"])
         tides = _get_tide_data(config, modeled_sst_f=sst_f)
-        
-        flag = calculate_flag(wave_ft, wind_mph, red_tide, mote["jellyfish"].lower() != "none")
+        jellyfish = str(mote.get("jellyfish", "None")).lower()
+        jellyfish_present = jellyfish not in ("none", "n/a", "unknown", "")
+
+        flag = calculate_flag(wave_ft, wind_mph, red_tide_status, jellyfish_present)
         tomorrow_date = _fl_now().date() + datetime.timedelta(days=1)
         tomorrow_wave_ft, tomorrow_period = _get_marine_day_stats(config, tomorrow_date)
 
@@ -1446,18 +1581,17 @@ def refresh_one_beach(beach_id: str) -> dict:
                 "type": mote["type"],
                 "rip_current": forecast["rip_current"],
             },
-            "weather": {"temp_f": temp_f, "wind_mph": wind_mph, "wind_dir": wind_dir},
-            "red_tide": {"status": red_tide},
+            "weather": obs,
+            "red_tide": red_tide,
             "mote_extras": mote,
-            "outlook": _build_outlook(flag, wave_ft, wind_mph, red_tide, mote, forecast, when="today"),
+            "outlook": _build_outlook(flag, wave_ft, wind_mph, red_tide_status, mote, forecast, when="today"),
             "outlook_tomorrow": _build_outlook(
-                flag, tomorrow_wave_ft, wind_mph, red_tide, mote, forecast, when="tomorrow"
+                flag, tomorrow_wave_ft, wind_mph, red_tide_status, mote, forecast, when="tomorrow"
             ),
             "teeth": _compute_shark_teeth_score(config, wave_ft, tides, mote),
             "clarity": {"label": "Good" if wave_ft < 1.5 else "Fair", "feet": round(max(1, 15 - (wave_ft * 4)), 0)}
         }
-        GLOBAL_DATA_STORE[beach_id] = data
-        return data
+        return _store_beach_data(beach_id, data)
     except Exception as e:
         print(f"[ERROR] refresh_one_beach {beach_id}: {e}")
         return {"error": str(e), "beach": BEACH_CONFIG.get(beach_id, {}).get("name", beach_id)}
@@ -1479,8 +1613,21 @@ async def data_refresher_loop():
             await asyncio.sleep(60)
 
 async def _warm_cache_on_startup() -> None:
-    print("[STARTUP] Warming beach cache for cold-start readiness...")
-    for beach_id in BEACH_CONFIG:
+    print("[STARTUP] Hydrating beach cache from Redis...")
+    try:
+        loaded = await asyncio.to_thread(cache_store.load_all, list(BEACH_CONFIG.keys()))
+        for beach_id, data in loaded.items():
+            data["data_quality"] = _build_data_quality(data, from_redis=True)
+            GLOBAL_DATA_STORE[beach_id] = data
+        if loaded:
+            print(f"[STARTUP] Redis hydrated {len(loaded)} beaches")
+    except Exception as e:
+        print(f"[WARN] redis hydrate failed (non-fatal): {str(e)[:80]}")
+
+    missing = [bid for bid in BEACH_CONFIG if bid not in GLOBAL_DATA_STORE]
+    if missing:
+        print(f"[STARTUP] Refreshing {len(missing)} beaches not in Redis...")
+    for beach_id in missing:
         try:
             await asyncio.to_thread(refresh_one_beach, beach_id)
         except Exception as e:
@@ -1520,6 +1667,10 @@ def get_beach_conditions(beach: str = "venice") -> dict:
     beach_id = get_beach_key(beach)
     if not beach_id or beach_id not in BEACH_CONFIG:
         beach_id = "venice"
+    cached = GLOBAL_DATA_STORE.get(beach_id)
+    if cached and not cached.get("error") and _cache_age_seconds(cached) <= DATA_STALE_SECONDS:
+        cached["data_quality"] = _build_data_quality(cached)
+        return cached
     return refresh_one_beach(beach_id)
 
 @mcp.tool()
@@ -1584,6 +1735,7 @@ async def list_beaches_with_flags(max_age: int = 0):
 async def get_beach_conditions_api(beach_id: str, max_age: int = 0):
     cached = GLOBAL_DATA_STORE.get(beach_id)
     if cached and (max_age <= 0 or _cache_age_seconds(cached) <= max_age):
+        cached["data_quality"] = _build_data_quality(cached)
         return cached
     return await asyncio.to_thread(refresh_one_beach, beach_id)
 
@@ -1633,6 +1785,8 @@ async def health():
         "beaches_cached": cached,
         "beaches_total": len(BEACH_CONFIG),
         "mcp_endpoint": "/mcp/sse",
+        "redis": cache_store.status(),
+        "disclaimer": SAFETY_DISCLAIMER,
     }
 
 print("[STARTUP] FastAPI app created and ready - all beach data sources integrated")

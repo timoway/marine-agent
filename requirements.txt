@@ -13,3 +13,4 @@ pydantic-settings
 httpx
 sse-starlette
 astral
+redis

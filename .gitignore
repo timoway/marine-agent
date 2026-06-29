@@ -15,3 +15,5 @@ frontend.log
 # IDE
 .vscode/
 .idea/
+.vercel
+.env*

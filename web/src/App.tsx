@@ -84,22 +84,52 @@ function activityReason(
   return val.reason;
 }
 
+interface SourceMeta {
+  fetched_at?: string;
+  ok?: boolean;
+  stale?: boolean;
+  source_url?: string;
+  error?: string;
+}
+
+interface DataQuality {
+  unknown_sources?: string[];
+  has_unknowns?: boolean;
+  stale?: boolean;
+  age_seconds?: number;
+  disclaimer?: string;
+  cached_from_redis?: boolean;
+}
+
 interface MarineData {
   beach: string;
   lat: number;
   lon: number;
   timestamp: string;
-  tides: { predictions: any[]; water_temp: string; water_temp_source?: string; current_status: string; trend: string; next_event: string; source: string; };
-  forecast: { summary: string; rip_current: string; source: string; };
+  tides: { predictions: any[]; water_temp: string; water_temp_source?: string; current_status: string; trend: string; next_event: string; source: string; meta?: SourceMeta; };
+  forecast: { summary: string; rip_current: string; source: string; meta?: SourceMeta; };
   skywatch: { moon_phase: string; illumination: string; planets_visible: string; upcoming_event: string; };
   surf: { height: number; period: number; period_note?: string; intensity: string; type: string; rip_current: string; };
-  weather: { temp_f: number; wind_mph: number; wind_dir: string; };
-  red_tide: { status: string; };
-  mote_extras: { water: string; algae: string; algae_type: string; jellyfish?: string; };
+  weather: { temp_f: number | null; wind_mph: number | null; wind_dir: string; meta?: SourceMeta; };
+  red_tide: { status: string; meta?: SourceMeta; };
+  mote_extras: { water: string; algae: string; algae_type: string; jellyfish?: string; meta?: SourceMeta; };
   outlook: OutlookShape;
   outlook_tomorrow?: OutlookShape;
   teeth: { score: number; label: string; tip: string; } | null;
   clarity: { label: string; feet: number; };
+  data_quality?: DataQuality;
+}
+
+function redTideColor(status: string | undefined): string {
+  if (status === 'Unknown') return '#facc15';
+  if (status && status !== 'Not Present') return '#f87171';
+  return '#4ade80';
+}
+
+function ripCurrentColor(rip: string | undefined): string {
+  if (!rip || rip === 'Unknown') return '#facc15';
+  if (rip.includes('High')) return '#f87171';
+  return '#4ade80';
 }
 
 type OutlookShape = {
@@ -536,6 +566,30 @@ function App() {
           </div>
         ) : data ? (
           <>
+            {(data.data_quality?.has_unknowns || data.data_quality?.stale) && (
+              <div className="safety-banner" role="status">
+                <AlertTriangle size={16} />
+                <div>
+                  {data.data_quality?.has_unknowns && (
+                    <p>
+                      Some sensors are unavailable
+                      {data.data_quality.unknown_sources?.length
+                        ? ` (${data.data_quality.unknown_sources.join(', ')})`
+                        : ''}
+                      . Check official sources before entering the water.
+                    </p>
+                  )}
+                  {data.data_quality?.stale && (
+                    <p>Conditions may be stale ({Math.round(data.data_quality.age_seconds ?? 0)}s old).</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <p className="safety-disclaimer">
+              {data.data_quality?.disclaimer ?? 'Advisory only — verify official beach flags, lifeguards, and NWS alerts before entering the water.'}
+            </p>
+
             <div className="header mobile-header">
               <div className="header-row">
                 <div className="header-main">
@@ -720,7 +774,7 @@ function App() {
                   )}
                   <div className="activity-list" style={{ marginTop: '12px' }}>
                     <div className="activity-item">
-                      <AlertTriangle size={16} color={data.surf?.rip_current?.includes('High') ? '#f87171' : '#4ade80'} />
+                      <AlertTriangle size={16} color={ripCurrentColor(data.surf?.rip_current)} />
                       <div style={{ fontSize: '0.9rem' }}><strong>Rip Currents:</strong> {data.surf?.rip_current ?? '--'}</div>
                     </div>
                     {data.mote_extras?.jellyfish && data.mote_extras.jellyfish !== 'None' && (
@@ -798,9 +852,23 @@ function App() {
 
               <div className="card">
                 <div className="card-title"><AlertTriangle size={18} /> Red Tide</div>
-                <div className="card-value" style={{ color: data.red_tide?.status !== 'Not Present' ? '#f87171' : '#4ade80' }}>
+                <div className="card-value" style={{ color: redTideColor(data.red_tide?.status) }}>
                   {data.red_tide?.status ?? '--'}
                 </div>
+                {data.red_tide?.status === 'Unknown' && (
+                  <div className="card-subvalue reason-text">
+                    FWC data unavailable — check{' '}
+                    <a href="https://myfwc.com/research/redtide/statewide/" target="_blank" rel="noopener noreferrer">
+                      myfwc.com/redtide
+                    </a>{' '}
+                    before swimming.
+                  </div>
+                )}
+                {data.red_tide?.meta?.fetched_at && (
+                  <div className="source-label">
+                    FWC sample {formatFloridaTime(data.red_tide.meta.fetched_at)}
+                  </div>
+                )}
               </div>
             </div>
           </>

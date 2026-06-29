@@ -1,4 +1,10 @@
 services:
+  - type: keyvalue
+    name: marine-agent-cache
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
+
   - type: web
     name: marine-agent
     runtime: python
@@ -15,3 +21,8 @@ services:
         sync: false
       - key: AGENT_API_KEY
         generateValue: true
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: marine-agent-cache
+          property: connectionString

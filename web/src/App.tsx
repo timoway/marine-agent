@@ -699,59 +699,79 @@ function App() {
                 )}
               </div>
 
-              {data.teeth && (
-                <div className="card teeth-card">
-                  <div className="card-title"><Footprints size={18} /> Shark Tooth Hunt</div>
-                  <div className="card-value">{data.teeth.label} <span className="teeth-score">{data.teeth.score}/10</span></div>
-                  <div className="card-subvalue reason-text">{data.teeth.tip}</div>
-                  <div className="source-label">Fossil beaches: Venice, Manasota Key, Caspersen, Nokomis, Englewood</div>
-                </div>
-              )}
+              <div className="card-pair">
+                {data.teeth && (
+                  <div className="card teeth-card">
+                    <div className="card-title"><Footprints size={18} /> Shark Tooth Hunt</div>
+                    <div className="card-value">{data.teeth.label} <span className="teeth-score">{data.teeth.score}/10</span></div>
+                    <div className="card-subvalue reason-text">{data.teeth.tip}</div>
+                    <div className="source-label">Fossil beaches: Venice, Manasota Key, Caspersen, Nokomis, Englewood</div>
+                  </div>
+                )}
 
-              {/* Weather & Forecast Card */}
+                <div className="card surf-card">
+                  <div className="card-title"><Waves size={18} /> Surf</div>
+                  <div className="card-value">{data.surf?.intensity ?? 'Unknown'}</div>
+                  <div className="card-subvalue">
+                    {data.surf?.type ?? '--'} · {data.surf?.height ?? '--'} ft · {data.surf?.period ?? '--'} sec between waves
+                  </div>
+                  {data.surf?.period_note && (
+                    <div className="surf-note">{data.surf.period_note}</div>
+                  )}
+                  <div className="activity-list" style={{ marginTop: '12px' }}>
+                    <div className="activity-item">
+                      <AlertTriangle size={16} color={data.surf?.rip_current?.includes('High') ? '#f87171' : '#4ade80'} />
+                      <div style={{ fontSize: '0.9rem' }}><strong>Rip Currents:</strong> {data.surf?.rip_current ?? '--'}</div>
+                    </div>
+                    {data.mote_extras?.jellyfish && data.mote_extras.jellyfish !== 'None' && (
+                      <div className="activity-item">
+                        <AlertTriangle size={16} color="#a855f7" />
+                        <div style={{ fontSize: '0.9rem' }}><strong>Jellyfish:</strong> {data.mote_extras.jellyfish}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {!data.teeth && (
+                  <div className="card water-algae-card">
+                    <div className="card-title"><Palette size={18} /> Water & Algae</div>
+                    <div className="card-value" style={{ fontSize: '1.5rem' }}>{data.mote_extras?.water ?? '--'}</div>
+                    <div style={{ marginTop: '12px' }}>
+                      <div className="activity-item">
+                        <Eye size={16} color="#3b82f6" />
+                        <div style={{ fontSize: '0.9rem' }}><strong>Visibility:</strong> {data.clarity?.feet ?? '--'} ft ({data.clarity?.label ?? '--'})</div>
+                      </div>
+                      <div className="activity-item">
+                        <Leaf size={16} color="#10b981" />
+                        <div style={{ fontSize: '0.9rem' }}><strong>Algae:</strong> {data.mote_extras?.algae ?? '--'} ({data.mote_extras?.algae_type ?? '--'})</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="card forecast-card">
                 <div className="card-title"><CloudSun size={18} /> Detailed Forecast</div>
                 <div className="card-value forecast-text">{data.forecast?.summary ?? '--'}</div>
                 <div className="source-label">Source: {data.forecast?.source ?? 'NWS'}</div>
               </div>
 
-              <div className="card">
-                <div className="card-title"><Waves size={18} /> Surf</div>
-                <div className="card-value">{data.surf?.intensity ?? 'Unknown'}</div>
-                <div className="card-subvalue">
-                  {data.surf?.type ?? '--'} · {data.surf?.height ?? '--'} ft · {data.surf?.period ?? '--'} sec between waves
-                </div>
-                {data.surf?.period_note && (
-                  <div className="surf-note">{data.surf.period_note}</div>
-                )}
-                <div className="activity-list" style={{ marginTop: '12px' }}>
-                   <div className="activity-item">
-                      <AlertTriangle size={16} color={data.surf?.rip_current?.includes('High') ? '#f87171' : '#4ade80'} />
-                      <div style={{ fontSize: '0.9rem' }}><strong>Rip Currents:</strong> {data.surf?.rip_current ?? '--'}</div>
-                   </div>
-                   {data.mote_extras?.jellyfish && data.mote_extras.jellyfish !== 'None' && (
-                     <div className="activity-item">
-                       <AlertTriangle size={16} color="#a855f7" />
-                       <div style={{ fontSize: '0.9rem' }}><strong>Jellyfish:</strong> {data.mote_extras.jellyfish}</div>
-                     </div>
-                   )}
-                </div>
-              </div>
-
-              <div className="card">
-                <div className="card-title"><Palette size={18} /> Water & Algae</div>
-                <div className="card-value" style={{ fontSize: '1.5rem' }}>{data.mote_extras?.water ?? '--'}</div>
-                <div style={{ marginTop: '12px' }}>
-                   <div className="activity-item">
+              {data.teeth && (
+                <div className="card water-algae-card">
+                  <div className="card-title"><Palette size={18} /> Water & Algae</div>
+                  <div className="card-value" style={{ fontSize: '1.5rem' }}>{data.mote_extras?.water ?? '--'}</div>
+                  <div style={{ marginTop: '12px' }}>
+                    <div className="activity-item">
                       <Eye size={16} color="#3b82f6" />
                       <div style={{ fontSize: '0.9rem' }}><strong>Visibility:</strong> {data.clarity?.feet ?? '--'} ft ({data.clarity?.label ?? '--'})</div>
-                   </div>
-                   <div className="activity-item">
+                    </div>
+                    <div className="activity-item">
                       <Leaf size={16} color="#10b981" />
                       <div style={{ fontSize: '0.9rem' }}><strong>Algae:</strong> {data.mote_extras?.algae ?? '--'} ({data.mote_extras?.algae_type ?? '--'})</div>
-                   </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="card">
                 <div className="card-title"><Moon size={18} /> Skywatch</div>

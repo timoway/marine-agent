@@ -969,8 +969,28 @@ body {
 }
 
 .hero-card,
-.forecast-card {
+.forecast-card,
+.card-pair {
   grid-column: 1 / -1;
+}
+
+.card-pair {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .card-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .card-pair {
+    gap: 24px;
+  }
 }
 
 .forecast-text {

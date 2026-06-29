@@ -409,41 +409,113 @@ def _analyze_hourly(hourly_periods: list) -> dict:
         "summary": "; ".join(summary_parts),
     }
 
-def _analyze_weather_situation(forecast: dict) -> dict:
+def _period_start_date(period: dict) -> Optional[datetime.date]:
+    try:
+        start = datetime.datetime.fromisoformat(period["startTime"])
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=FL_TZ)
+        else:
+            start = start.astimezone(FL_TZ)
+        return start.date()
+    except (KeyError, ValueError, TypeError):
+        return None
+
+def _advisory_from_forecast(hazards: dict, active_alerts: list) -> tuple[str, str]:
+    if hazards.get("hurricane_warning") or hazards.get("tropical_storm_warning") or hazards.get("tornado_warning"):
+        return "severe", "Active NWS warning for tropical or severe weather"
+    if hazards.get("special_marine_warning") or hazards.get("severe_thunderstorm_warning"):
+        return "active", next(
+            (a["headline"] for a in active_alerts if a["event"] in ("Special Marine Warning", "Severe Thunderstorm Warning")),
+            "Active marine or severe thunderstorm warning",
+        )
+    if hazards.get("special_weather_statement"):
+        return "active", next(
+            (a["headline"] for a in active_alerts if a["event"] == "Special Weather Statement"),
+            "NWS special weather statement for nearby storms",
+        )
+    if hazards.get("marine_weather_statement"):
+        return "likely", next(
+            (a["headline"] for a in active_alerts if a["event"] == "Marine Weather Statement"),
+            "Marine weather statement in effect",
+        )
+    if hazards.get("hurricane_watch") or hazards.get("tropical_storm_watch"):
+        return "likely", "Tropical weather watch in effect"
+    return "none", ""
+
+def _analyze_tomorrow_situation(forecast: dict) -> dict:
+    now = _fl_now()
+    target_date = now.date() + datetime.timedelta(days=1)
+    periods = forecast.get("periods", [])
+    hazards = forecast.get("hazards", {})
+    active_alerts = forecast.get("active_alerts", [])
+    advisory_level, advisory_reason = _advisory_from_forecast(hazards, active_alerts)
+
+    day_text = ""
+    night_text = ""
+    day_period = None
+    for period in periods:
+        if _period_start_date(period) != target_date:
+            continue
+        name = period.get("name", "")
+        text = period.get("detailedForecast", "")
+        full = f"{name} {text}"
+        if period.get("isDaytime", True):
+            day_text += f" {full}"
+            if day_period is None:
+                day_period = period
+        else:
+            night_text += f" {full}"
+
+    if not day_text.strip():
+        weekday = target_date.strftime("%A").lower()
+        for period in periods:
+            name = (period.get("name") or "").lower()
+            if weekday in name and "night" not in name:
+                day_text = f"{period.get('name', '')} {period.get('detailedForecast', '')}"
+                day_period = period
+                break
+
+    if not day_text.strip() and len(periods) > 2:
+        day_text = periods[2].get("detailedForecast", "")
+        day_period = periods[2]
+
+    now_likelihood = _max_likelihood(_storm_likelihood_in_text(day_text))
+    later_likelihood = _max_likelihood(_storm_likelihood_in_text(night_text))
+    if day_period:
+        forecast_headline = f"{day_period.get('name', target_date.strftime('%A'))}: {day_period.get('detailedForecast', '')}"
+    else:
+        forecast_headline = f"{target_date.strftime('%A')}: Forecast unavailable for tomorrow."
+
+    return {
+        "hour": 8,
+        "time_bucket": "morning",
+        "planning_horizon": "tomorrow",
+        "verdict_title": "Tomorrow's outlook",
+        "plan_label": "Plan for tomorrow",
+        "advisory_level": advisory_level,
+        "advisory_reason": advisory_reason,
+        "now_likelihood": now_likelihood,
+        "later_likelihood": later_likelihood,
+        "forecast_headline": forecast_headline,
+        "current_forecast_text": day_text.strip(),
+        "hourly_summary": "",
+        "hourly_lines": [],
+        "hourly_max_pop": 0,
+        "current_period": day_period.get("name", target_date.strftime("%A")) if day_period else target_date.strftime("%A"),
+        "active_alerts": active_alerts,
+        "radar_proximity": {},
+    }
+
+def _analyze_weather_situation(forecast: dict, when: str = "today") -> dict:
+    if when == "tomorrow":
+        return _analyze_tomorrow_situation(forecast)
     now = _fl_now()
     hour = now.hour
     time_bucket = _time_of_day_bucket(hour)
     periods = forecast.get("periods", [])
     hazards = forecast.get("hazards", {})
     active_alerts = forecast.get("active_alerts", [])
-
-    if hazards.get("hurricane_warning") or hazards.get("tropical_storm_warning") or hazards.get("tornado_warning"):
-        advisory_level = "severe"
-        advisory_reason = "Active NWS warning for tropical or severe weather"
-    elif hazards.get("special_marine_warning") or hazards.get("severe_thunderstorm_warning"):
-        advisory_level = "active"
-        advisory_reason = next(
-            (a["headline"] for a in active_alerts if a["event"] in ("Special Marine Warning", "Severe Thunderstorm Warning")),
-            "Active marine or severe thunderstorm warning",
-        )
-    elif hazards.get("special_weather_statement"):
-        advisory_level = "active"
-        advisory_reason = next(
-            (a["headline"] for a in active_alerts if a["event"] == "Special Weather Statement"),
-            "NWS special weather statement for nearby storms",
-        )
-    elif hazards.get("marine_weather_statement"):
-        advisory_level = "likely"
-        advisory_reason = next(
-            (a["headline"] for a in active_alerts if a["event"] == "Marine Weather Statement"),
-            "Marine weather statement in effect",
-        )
-    elif hazards.get("hurricane_watch") or hazards.get("tropical_storm_watch"):
-        advisory_level = "likely"
-        advisory_reason = "Tropical weather watch in effect"
-    else:
-        advisory_level = "none"
-        advisory_reason = ""
+    advisory_level, advisory_reason = _advisory_from_forecast(hazards, active_alerts)
 
     current_text = ""
     later_text = ""
@@ -496,6 +568,7 @@ def _analyze_weather_situation(forecast: dict) -> dict:
     return {
         "hour": hour,
         "time_bucket": time_bucket,
+        "planning_horizon": "today",
         "verdict_title": _verdict_title(time_bucket),
         "plan_label": _plan_panel_label(time_bucket),
         "advisory_level": advisory_level,
@@ -523,7 +596,30 @@ def _radar_plan_reason(situation: dict) -> Optional[str]:
         return f"Precipitation detected on radar nearby ({dbz} dBZ)"
     return None
 
+def _forecast_tomorrow_plan_status(situation: dict) -> tuple[str, str]:
+    advisory = situation["advisory_level"]
+    if advisory in ("severe", "active"):
+        return "Red", situation["advisory_reason"] or "Weather advisory in effect tomorrow"
+    if advisory == "likely":
+        return "Red", situation["advisory_reason"] or "Tropical weather threat tomorrow"
+
+    now_lvl = situation["now_likelihood"]
+    later_lvl = situation["later_likelihood"]
+    if now_lvl in ("severe", "active"):
+        return "Red", "Storms expected tomorrow"
+    if now_lvl == "likely":
+        return "Yellow", "Storms likely tomorrow — morning may be the best window"
+    if now_lvl == "chance":
+        return "Yellow", "Showers or storms possible tomorrow"
+    if later_lvl in ("likely", "active"):
+        return "Yellow", "Storms possible tomorrow evening"
+    if later_lvl == "chance":
+        return "Yellow", "Isolated storms possible tomorrow night"
+    return "Green", "Favorable conditions expected tomorrow"
+
 def _forecast_plan_status(situation: dict) -> tuple[str, str]:
+    if situation.get("planning_horizon") == "tomorrow":
+        return _forecast_tomorrow_plan_status(situation)
     advisory = situation["advisory_level"]
     if advisory in ("severe", "active"):
         return "Red", situation["advisory_reason"] or "Active weather advisory"
@@ -581,7 +677,24 @@ def _physical_activity_status(activity: str, wave_ft: float, wind_mph: float, re
         return "Yellow", f"Windy or rough surf ({wind_mph} mph, {wave_ft:.1f} ft)"
     return "Green", "Comfortable beach conditions"
 
+def _forecast_tomorrow_activity_status(activity: str, situation: dict) -> tuple[str, str]:
+    advisory = situation["advisory_level"]
+    if advisory in ("severe", "active", "likely"):
+        return "Red", situation["advisory_reason"] or "Weather advisory in effect tomorrow"
+
+    now_lvl = situation["now_likelihood"]
+    later_lvl = situation["later_likelihood"]
+    if now_lvl in ("severe", "active", "likely"):
+        return "Red", "Storms expected tomorrow"
+    if now_lvl == "chance":
+        return "Yellow", "Showers or storms possible tomorrow"
+    if later_lvl in ("likely", "active", "chance"):
+        return "Yellow", "Storm risk tomorrow evening or night"
+    return "Green", "No significant storm risk forecast for tomorrow"
+
 def _forecast_activity_status(activity: str, situation: dict) -> tuple[str, str]:
+    if situation.get("planning_horizon") == "tomorrow":
+        return _forecast_tomorrow_activity_status(activity, situation)
     advisory = situation["advisory_level"]
     if advisory in ("severe", "active", "likely"):
         return "Red", situation["advisory_reason"] or "Weather advisory in effect"
@@ -630,16 +743,17 @@ def _build_activities(situation: dict, wave_ft: float, wind_mph: float, red_tide
         activities[name] = {"status": status, "reason": reason}
     return activities
 
-def _activities_summary(activities: dict) -> Optional[str]:
+def _activities_summary(activities: dict, horizon: str = "today") -> Optional[str]:
     reasons = {a["reason"] for a in activities.values() if a["status"] != "Green"}
     if len(reasons) == 1:
         return reasons.pop()
     statuses = {a["status"] for a in activities.values()}
     if statuses == {"Green"}:
-        return "All activities look good right now"
+        return "All activities look good tomorrow" if horizon == "tomorrow" else "All activities look good right now"
     return None
 
 def _compute_verdict(flag: dict, plan_status: str, plan_reason: str, situation: dict, wave_ft: float, wind_mph: float) -> dict:
+    horizon = situation.get("planning_horizon", "today")
     if flag["label"] == "DOUBLE RED":
         headline, status = "Avoid — water closed", "Red"
         reason = "Dangerous surf or severe biological hazard"
@@ -653,10 +767,10 @@ def _compute_verdict(flag: dict, plan_status: str, plan_reason: str, situation: 
         headline, status = "Not recommended — weather advisory", "Red"
         reason = situation["advisory_reason"]
     elif plan_status == "Red":
-        headline, status = "Not recommended right now", "Red"
+        headline, status = ("Not recommended tomorrow", "Red") if horizon == "tomorrow" else ("Not recommended right now", "Red")
         reason = plan_reason
     elif plan_status == "Yellow":
-        headline = "Go with caution"
+        headline = "Plan with caution tomorrow" if horizon == "tomorrow" else "Go with caution"
         status = "Yellow"
         reason = plan_reason
     elif flag["label"] == "PURPLE FLAG":
@@ -666,7 +780,7 @@ def _compute_verdict(flag: dict, plan_status: str, plan_reason: str, situation: 
         headline, status = "Okay with caution", "Yellow"
         reason = f"Moderate surf or wind ({wave_ft:.1f} ft, {wind_mph} mph). {plan_reason}"
     else:
-        headline, status = "Good to go", "Green"
+        headline, status = ("Looks good tomorrow", "Green") if horizon == "tomorrow" else ("Good to go", "Green")
         reason = plan_reason
 
     return {
@@ -676,18 +790,28 @@ def _compute_verdict(flag: dict, plan_status: str, plan_reason: str, situation: 
         "reason": reason,
     }
 
-def _build_outlook(flag: dict, wave_ft: float, wind_mph: float, red_tide: str, mote: dict, forecast: dict) -> dict:
-    situation = _analyze_weather_situation(forecast)
+def _build_outlook(
+    flag: dict,
+    wave_ft: float,
+    wind_mph: float,
+    red_tide: str,
+    mote: dict,
+    forecast: dict,
+    when: str = "today",
+) -> dict:
+    situation = _analyze_weather_situation(forecast, when=when)
     plan_status, plan_reason = _forecast_plan_status(situation)
     activities = _build_activities(situation, wave_ft, wind_mph, red_tide)
     verdict = _compute_verdict(flag, plan_status, plan_reason, situation, wave_ft, wind_mph)
     official_reason = _get_daily_outlook(wave_ft, wind_mph, red_tide, mote, forecast)["reason"]
+    horizon = situation.get("planning_horizon", "today")
 
-    return {
+    outlook = {
         **flag,
         "reason": official_reason,
         "verdict_title": situation.get("verdict_title", "Today's outlook"),
         "plan_label": situation.get("plan_label", "Plan for today"),
+        "planning_horizon": horizon,
         "water_now": {
             "label": flag["label"],
             "vibe": flag["vibe"],
@@ -704,12 +828,15 @@ def _build_outlook(flag: dict, wave_ft: float, wind_mph: float, red_tide: str, m
         },
         "verdict": verdict,
         "activities": activities,
-        "activities_summary": _activities_summary(activities),
+        "activities_summary": _activities_summary(activities, horizon=horizon),
         "storm_badge": len(situation.get("active_alerts", [])) > 0,
         "radar_nearby": situation.get("radar_proximity", {}).get("storm_nearby", False),
         "radar_proximity": situation.get("radar_proximity", {}),
         "active_alerts": situation.get("active_alerts", []),
     }
+    if horizon == "tomorrow":
+        outlook.pop("water_now", None)
+    return outlook
 
 def _has_red_tide(data: dict) -> bool:
     return data.get("red_tide", {}).get("status", "Not Present") != "Not Present"
@@ -721,24 +848,30 @@ def _has_purple_hazard(data: dict) -> bool:
     jellyfish = str(data.get("mote_extras", {}).get("jellyfish", "None")).lower()
     return jellyfish not in ("none", "n/a", "")
 
-def _rank_tier_level(data: dict) -> int:
+def _outlook_for_when(data: dict, when: str) -> dict:
+    if when == "tomorrow":
+        return data.get("outlook_tomorrow") or data.get("outlook", {})
+    return data.get("outlook", {})
+
+def _rank_tier_level(data: dict, when: str = "today") -> int:
     """Lower level = better rank. 4=avoid, 3=NWS warning, 2=caution, 1=radar, 0=best."""
     if _has_red_tide(data):
         return 4
-    outlook = data.get("outlook", {})
+    outlook = _outlook_for_when(data, when)
     if outlook.get("storm_badge"):
         return 3
     if _has_purple_hazard(data):
         return 2
-    radar = outlook.get("radar_proximity", {})
-    if radar.get("level") == "heavy":
-        return 2
-    if outlook.get("radar_nearby"):
-        return 1
+    if when == "today":
+        radar = outlook.get("radar_proximity", {})
+        if radar.get("level") == "heavy":
+            return 2
+        if outlook.get("radar_nearby"):
+            return 1
     return 0
 
-def _rank_tier(data: dict) -> str:
-    level = _rank_tier_level(data)
+def _rank_tier(data: dict, when: str = "today") -> str:
+    level = _rank_tier_level(data, when=when)
     if level >= 4:
         return "avoid"
     if level >= 3:
@@ -749,33 +882,38 @@ def _rank_tier(data: dict) -> str:
         return "radar"
     return "best"
 
-def _rank_sort_key(data: dict, activity: str) -> tuple:
+def _rank_sort_key(data: dict, activity: str, when: str = "today") -> tuple:
     """Lower tuple = better rank."""
-    outlook = data.get("outlook", {})
-    tier_level = _rank_tier_level(data)
+    outlook = _outlook_for_when(data, when)
+    tier_level = _rank_tier_level(data, when=when)
     verdict_status = outlook.get("verdict", {}).get("status")
     activity_status = _activity_status_value(outlook.get("activities", {}), activity)
     status_score = ACTIVITY_RANK.get(verdict_status or activity_status, 2)
     wind = data.get("weather", {}).get("wind_mph", 99)
     surf = data.get("surf", {}).get("height", 99)
-    radar_dbz = outlook.get("radar_proximity", {}).get("max_dbz", 0)
+    if when == "tomorrow":
+        surf = data.get("surf", {}).get("tomorrow_height", surf)
+    radar_dbz = outlook.get("radar_proximity", {}).get("max_dbz", 0) if when == "today" else 0
     return (tier_level, status_score, wind, surf, -radar_dbz)
 
-def _rank_summary(data: dict, activity: str) -> str:
+def _rank_summary(data: dict, activity: str, when: str = "today") -> str:
+    outlook = _outlook_for_when(data, when)
     parts = [
-        f"{activity.title()}: {_activity_status_value(data.get('outlook', {}).get('activities', {}), activity)}",
+        f"{activity.title()}: {_activity_status_value(outlook.get('activities', {}), activity)}",
         f"{data.get('weather', {}).get('wind_mph', '--')} mph wind",
-        f"{data.get('surf', {}).get('height', '--')} ft surf",
     ]
+    if when == "tomorrow":
+        parts.append(f"{data.get('surf', {}).get('tomorrow_height', data.get('surf', {}).get('height', '--'))} ft surf (forecast)")
+    else:
+        parts.append(f"{data.get('surf', {}).get('height', '--')} ft surf")
     red_tide = data.get("red_tide", {}).get("status", "Not Present")
     if red_tide != "Not Present":
         parts.append(f"red tide ({red_tide})")
     if _has_purple_hazard(data):
         parts.append("purple flag / stinging life")
-    outlook = data.get("outlook", {})
     if outlook.get("storm_badge"):
         parts.append("NWS weather warning")
-    elif outlook.get("radar_nearby"):
+    elif when == "today" and outlook.get("radar_nearby"):
         parts.append(f"radar {outlook.get('radar_proximity', {}).get('max_dbz', 0)} dBZ nearby")
     return "; ".join(parts)
 
@@ -806,6 +944,7 @@ def rank_beaches_data(
     near_lat: Optional[float] = None,
     near_lon: Optional[float] = None,
     radius_miles: Optional[float] = None,
+    when: str = "today",
 ) -> dict:
     activity = activity if activity in VALID_ACTIVITIES else "paddling"
     limit = max(1, min(limit, len(BEACH_CONFIG)))
@@ -838,21 +977,25 @@ def rank_beaches_data(
             if dist <= active_radius:
                 candidates.append((candidate_id, config, data, dist))
 
-    candidates.sort(key=lambda item: _rank_sort_key(item[2], activity))
+    candidates.sort(key=lambda item: _rank_sort_key(item[2], activity, when=when))
     results = []
     for idx, (candidate_id, config, data, dist) in enumerate(candidates[:limit], start=1):
+        outlook = _outlook_for_when(data, when)
+        surf_ft = data.get("surf", {}).get("height")
+        if when == "tomorrow":
+            surf_ft = data.get("surf", {}).get("tomorrow_height", surf_ft)
         entry = {
             "rank": idx,
             "beach_id": candidate_id,
             "name": config["name"],
-            "rank_tier": _rank_tier(data),
-            "activity_status": _activity_status_value(data.get("outlook", {}).get("activities", {}), activity),
+            "rank_tier": _rank_tier(data, when=when),
+            "activity_status": _activity_status_value(outlook.get("activities", {}), activity),
             "flag": data.get("outlook", {}).get("label", "UNKNOWN"),
             "wind_mph": data.get("weather", {}).get("wind_mph"),
-            "surf_ft": data.get("surf", {}).get("height"),
+            "surf_ft": surf_ft,
             "red_tide": data.get("red_tide", {}).get("status", "Not Present"),
             "jellyfish": data.get("mote_extras", {}).get("jellyfish", "None"),
-            "summary": _rank_summary(data, activity),
+            "summary": _rank_summary(data, activity, when=when),
         }
         if dist is not None:
             entry["distance_miles"] = round(dist, 1)
@@ -860,7 +1003,7 @@ def rank_beaches_data(
 
     response = {
         "activity": activity,
-        "when": "today",
+        "when": when,
         "generated_at": _fl_now().isoformat(),
         "timezone": "America/New_York",
         "total_beaches": len(BEACH_CONFIG),
@@ -937,6 +1080,36 @@ def _describe_wave_period(period: Optional[float]) -> str:
     if p < 13:
         return f"{p} sec between wave crests — longer-period swell, cleaner and more powerful"
     return f"{p} sec between wave crests — long ground swell with more energy per wave"
+
+def _get_marine_day_stats(config: dict, target_date: datetime.date) -> tuple[float, float]:
+    try:
+        url = (
+            f"https://marine-api.open-meteo.com/v1/marine?latitude={config['lat']}&longitude={config['lon']}"
+            "&hourly=wave_height,swell_wave_period,sea_surface_temperature&timezone=auto"
+        )
+        r = requests.get(url, timeout=5).json()
+        times = r["hourly"]["time"]
+        waves = r["hourly"]["wave_height"]
+        periods = r["hourly"]["swell_wave_period"]
+        wave_vals = []
+        period_vals = []
+        for idx, stamp in enumerate(times):
+            start = datetime.datetime.fromisoformat(stamp)
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=FL_TZ)
+            else:
+                start = start.astimezone(FL_TZ)
+            if start.date() != target_date or not (8 <= start.hour <= 18):
+                continue
+            if waves[idx] is not None:
+                wave_vals.append(waves[idx] * 3.28)
+            if periods[idx] is not None:
+                period_vals.append(periods[idx])
+        wave_ft = sum(wave_vals) / len(wave_vals) if wave_vals else 0.5
+        period = sum(period_vals) / len(period_vals) if period_vals else 4.0
+        return wave_ft, period
+    except Exception:
+        return 0.5, 4.0
 
 def _get_marine_data(config: dict):
     try:
@@ -1251,6 +1424,8 @@ def refresh_one_beach(beach_id: str) -> dict:
         tides = _get_tide_data(config, modeled_sst_f=sst_f)
         
         flag = calculate_flag(wave_ft, wind_mph, red_tide, mote["jellyfish"].lower() != "none")
+        tomorrow_date = _fl_now().date() + datetime.timedelta(days=1)
+        tomorrow_wave_ft, tomorrow_period = _get_marine_day_stats(config, tomorrow_date)
 
         data = {
             "beach": config["name"],
@@ -1263,7 +1438,9 @@ def refresh_one_beach(beach_id: str) -> dict:
             "skywatch": _get_skywatch(),
             "surf": {
                 "height": round(wave_ft, 1),
+                "tomorrow_height": round(tomorrow_wave_ft, 1),
                 "period": round(period, 1) if period else None,
+                "tomorrow_period": round(tomorrow_period, 1),
                 "period_note": _describe_wave_period(period),
                 "intensity": mote["intensity"],
                 "type": mote["type"],
@@ -1272,7 +1449,10 @@ def refresh_one_beach(beach_id: str) -> dict:
             "weather": {"temp_f": temp_f, "wind_mph": wind_mph, "wind_dir": wind_dir},
             "red_tide": {"status": red_tide},
             "mote_extras": mote,
-            "outlook": _build_outlook(flag, wave_ft, wind_mph, red_tide, mote, forecast),
+            "outlook": _build_outlook(flag, wave_ft, wind_mph, red_tide, mote, forecast, when="today"),
+            "outlook_tomorrow": _build_outlook(
+                flag, tomorrow_wave_ft, wind_mph, red_tide, mote, forecast, when="tomorrow"
+            ),
             "teeth": _compute_shark_teeth_score(config, wave_ft, tides, mote),
             "clarity": {"label": "Good" if wave_ft < 1.5 else "Fair", "feet": round(max(1, 15 - (wave_ft * 4)), 0)}
         }
@@ -1343,9 +1523,21 @@ def get_beach_conditions(beach: str = "venice") -> dict:
     return refresh_one_beach(beach_id)
 
 @mcp.tool()
-def rank_beaches(activity: str = "paddling", limit: int = 5, beach_id: str = "venice", radius_miles: int = 50) -> dict:
-    """Rank beaches for an activity near an anchor beach (default 50mi). Red tide beaches are fully deranked; purple flag / jellyfish heavily penalized."""
-    return rank_beaches_data(activity=activity, limit=limit, beach_id=beach_id, radius_miles=radius_miles)
+def rank_beaches(
+    activity: str = "paddling",
+    limit: int = 5,
+    beach_id: str = "venice",
+    radius_miles: int = 50,
+    when: str = "today",
+) -> dict:
+    """Rank beaches for an activity near an anchor beach (default 50mi). Supports when=today or when=tomorrow."""
+    return rank_beaches_data(
+        activity=activity,
+        limit=limit,
+        beach_id=beach_id,
+        radius_miles=radius_miles,
+        when=when,
+    )
 
 # --- API ROUTES FOR FRONTEND DASHBOARD ---
 def _cache_age_seconds(data: dict) -> float:
@@ -1406,8 +1598,8 @@ async def rank_beaches_api(
     near_lon: Optional[float] = None,
     radius_miles: Optional[float] = None,
 ):
-    if when != "today":
-        raise HTTPException(status_code=400, detail="Only when=today is supported right now")
+    if when not in ("today", "tomorrow"):
+        raise HTTPException(status_code=400, detail="when must be 'today' or 'tomorrow'")
     if activity not in VALID_ACTIVITIES:
         raise HTTPException(status_code=400, detail=f"activity must be one of: {', '.join(sorted(VALID_ACTIVITIES))}")
     if beach_id and beach_id not in BEACH_CONFIG:
@@ -1426,6 +1618,7 @@ async def rank_beaches_api(
         near_lat=near_lat,
         near_lon=near_lon,
         radius_miles=radius_miles,
+        when=when,
     )
 
 @app.get("/health")

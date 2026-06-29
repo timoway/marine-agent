@@ -4,7 +4,7 @@ import {
   Waves, Thermometer, Eye, Droplets, AlertTriangle, 
   Ship, Calendar, Search, Menu, X, LayoutDashboard, Map as MapIcon,
   Activity, Palette, Leaf, Moon, CloudSun, Navigation2,
-  TrendingUp, TrendingDown, Flag, Radar, ChevronRight, Footprints, Zap
+  TrendingUp, TrendingDown, Flag, Radar, ChevronRight, Footprints, Zap, Home
 } from 'lucide-react';
 import MapGL, { Marker, NavigationControl, Source, Layer } from 'react-map-gl/mapbox';
 import InstallPrompt from './InstallPrompt';
@@ -34,6 +34,7 @@ interface RankResult {
 
 interface RankResponse {
   activity: RankActivity;
+  when?: PlanningHorizon;
   nearby?: {
     anchor_beach_id: string | null;
     anchor_name: string;
@@ -44,11 +45,26 @@ interface RankResponse {
 }
 
 const RANK_RADIUS_MILES = 50;
+const HOME_BEACH_KEY = 'marineagent-home-beach';
 const RANK_ACTIVITY_LABELS: Record<RankActivity, string> = {
   paddling: 'Paddle',
   swimming: 'Swim',
   beach: 'Beach',
 };
+
+type PlanningHorizon = 'today' | 'tomorrow';
+
+function readStoredHomeBeach(): string | null {
+  try {
+    return localStorage.getItem(HOME_BEACH_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storeHomeBeach(beachId: string) {
+  localStorage.setItem(HOME_BEACH_KEY, beachId);
+}
 
 function activityStatus(
   activities: MarineData['outlook']['activities'] | undefined,
@@ -80,7 +96,13 @@ interface MarineData {
   weather: { temp_f: number; wind_mph: number; wind_dir: string; };
   red_tide: { status: string; };
   mote_extras: { water: string; algae: string; algae_type: string; jellyfish?: string; };
-  outlook: { 
+  outlook: OutlookShape;
+  outlook_tomorrow?: OutlookShape;
+  teeth: { score: number; label: string; tip: string; } | null;
+  clarity: { label: string; feet: number; };
+}
+
+type OutlookShape = {
     label: string; 
     vibe: string; 
     reason: string; 
@@ -107,15 +129,13 @@ interface MarineData {
     radar_nearby?: boolean;
     radar_proximity?: { max_dbz: number; level: string; storm_nearby: boolean; radius_miles: number; };
     active_alerts?: { event: string; headline: string; severity?: string; }[];
-  };
-  teeth: { score: number; label: string; tip: string; } | null;
-  clarity: { label: string; feet: number; };
-}
+};
 
 function App() {
   const [beaches, setBeaches] = useState<Beach[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedBeach, setSelectedBeach] = useState<string>('venice');
+  const [homeBeach, setHomeBeach] = useState<string | null>(() => readStoredHomeBeach());
+  const [selectedBeach, setSelectedBeach] = useState<string>(() => readStoredHomeBeach() ?? 'venice');
   const [data, setData] = useState<MarineData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +144,7 @@ function App() {
   const [viewMode, setViewMode] = useState<'dashboard' | 'map'>('dashboard');
   const [showRadar, setShowRadar] = useState(false);
   const [mapZoom, setMapZoom] = useState(8.2);
+  const [planningHorizon, setPlanningHorizon] = useState<PlanningHorizon>('today');
   const [rankActivity, setRankActivity] = useState<RankActivity>('paddling');
   const [rankData, setRankData] = useState<RankResponse | null>(null);
   const [rankLoading, setRankLoading] = useState(false);
@@ -144,6 +165,11 @@ function App() {
     setSelectedBeach(beachId);
     setViewMode('dashboard');
     if (isMobile) closeSidebar();
+  };
+
+  const setAsHomeBeach = (beachId: string) => {
+    storeHomeBeach(beachId);
+    setHomeBeach(beachId);
   };
 
   useEffect(() => {
@@ -213,6 +239,7 @@ function App() {
     setRankError(null);
     const params = new URLSearchParams({
       activity: rankActivity,
+      when: planningHorizon,
       beach_id: selectedBeach,
       radius_miles: String(RANK_RADIUS_MILES),
       limit: '5',
@@ -233,7 +260,7 @@ function App() {
         }
       });
     return () => { cancelled = true; };
-  }, [selectedBeach, rankActivity]);
+  }, [selectedBeach, rankActivity, planningHorizon]);
 
   const rankAnchorName = useMemo(() => {
     const beach = beaches.find(b => b.id === selectedBeach);
@@ -254,6 +281,15 @@ function App() {
     if (beach) return { latitude: beach.lat, longitude: beach.lon, zoom: 9.2 };
     return { latitude: 27.1, longitude: -82.4, zoom: 8.2 };
   }, [beaches, selectedBeach]);
+
+  const planOutlook = useMemo(() => {
+    if (planningHorizon === 'tomorrow' && data?.outlook_tomorrow) {
+      return data.outlook_tomorrow;
+    }
+    return data?.outlook ?? null;
+  }, [data, planningHorizon]);
+
+  const waterOutlook = data?.outlook ?? null;
 
   return (
     <div className="dashboard-container">
@@ -287,11 +323,25 @@ function App() {
 
         <div className="rank-panel">
           <div className="rank-panel-header">
-            <span className="rank-panel-title">Best nearby today</span>
+            <span className="rank-panel-title">
+              Best nearby {planningHorizon === 'tomorrow' ? 'tomorrow' : 'today'}
+            </span>
             <span className="rank-panel-subtitle">
               Within {rankData?.nearby?.radius_miles ?? RANK_RADIUS_MILES} mi of {rankAnchorName}
               {rankData?.nearby?.radius_expanded ? ' (expanded)' : ''}
             </span>
+          </div>
+          <div className="planning-horizon-chips">
+            {(['today', 'tomorrow'] as PlanningHorizon[]).map(horizon => (
+              <button
+                key={horizon}
+                type="button"
+                className={`rank-chip ${planningHorizon === horizon ? 'active' : ''}`}
+                onClick={() => setPlanningHorizon(horizon)}
+              >
+                {horizon === 'today' ? 'Today' : 'Tomorrow'}
+              </button>
+            ))}
           </div>
           <div className="rank-activity-chips">
             {(Object.keys(RANK_ACTIVITY_LABELS) as RankActivity[]).map(activity => (
@@ -364,6 +414,7 @@ function App() {
             >
               <div className="beach-item-dot" style={{ backgroundColor: beach.color }} />
               <span className="beach-item-name">{beach.name}</span>
+              {homeBeach === beach.id && <Home size={14} className="beach-item-home" aria-label="Home beach" />}
               <ChevronRight size={16} className="beach-item-chevron" />
             </button>
           ))}
@@ -498,8 +549,19 @@ function App() {
                     <p className="water-temp-source">Water temp: {data.tides.water_temp_source}</p>
                   )}
                 </div>
-                <div className="glass-flag" style={{ borderColor: data.outlook?.color }}>
-                  <Flag size={20} color={data.outlook?.color} fill={data.outlook?.color} />
+                <div className="header-actions">
+                  <button
+                    type="button"
+                    className={`home-beach-btn compact ${homeBeach === selectedBeach ? 'active' : ''}`}
+                    onClick={() => setAsHomeBeach(selectedBeach)}
+                    title="Set as home beach"
+                    aria-label={homeBeach === selectedBeach ? 'Home beach' : 'Set as home beach'}
+                  >
+                    <Home size={16} />
+                  </button>
+                  <div className="glass-flag" style={{ borderColor: data.outlook?.color }}>
+                    <Flag size={20} color={data.outlook?.color} fill={data.outlook?.color} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -507,7 +569,18 @@ function App() {
             <div className="header desktop-only">
               <div className="header-row">
                 <div className="header-main">
-                  <h1 className="beach-name">{data.beach}</h1>
+                  <div className="beach-name-row">
+                    <h1 className="beach-name">{data.beach}</h1>
+                    <button
+                      type="button"
+                      className={`home-beach-btn ${homeBeach === selectedBeach ? 'active' : ''}`}
+                      onClick={() => setAsHomeBeach(selectedBeach)}
+                      title="Set as home beach"
+                    >
+                      <Home size={15} />
+                      {homeBeach === selectedBeach ? 'Home beach' : 'Set home'}
+                    </button>
+                  </div>
                   <div className="beach-meta">
                     <span className="meta-item"><Thermometer size={16} /> Air: {data.weather?.temp_f ?? '--'}°F</span>
                     <span className="divider">|</span>
@@ -534,34 +607,34 @@ function App() {
             </div>
 
             <div className="grid">
-              <div className="card hero-card" style={{ borderLeft: `6px solid ${data.outlook?.verdict?.color ?? data.outlook?.color ?? '#3b82f6'}` }}>
-                <div className="card-title"><Calendar size={18} /> {data.outlook?.verdict_title ?? "Today's outlook"}</div>
-                <div className="card-value hero-value">{data.outlook?.verdict?.headline ?? data.outlook?.label ?? '--'}</div>
-                <div className="card-subvalue reason-text">{data.outlook?.verdict?.reason ?? data.outlook?.reason ?? '--'}</div>
+              <div className="card hero-card" style={{ borderLeft: `6px solid ${planOutlook?.verdict?.color ?? planOutlook?.color ?? '#3b82f6'}` }}>
+                <div className="card-title"><Calendar size={18} /> {planOutlook?.verdict_title ?? "Today's outlook"}</div>
+                <div className="card-value hero-value">{planOutlook?.verdict?.headline ?? planOutlook?.label ?? '--'}</div>
+                <div className="card-subvalue reason-text">{planOutlook?.verdict?.reason ?? planOutlook?.reason ?? '--'}</div>
 
                 <div className="outlook-split">
-                  <div className="outlook-panel" style={{ borderColor: data.outlook?.water_now?.color ?? data.outlook?.color }}>
+                  <div className="outlook-panel" style={{ borderColor: waterOutlook?.water_now?.color ?? waterOutlook?.color }}>
                     <span className="outlook-panel-label">Water now</span>
-                    <span className="outlook-panel-value" style={{ color: data.outlook?.water_now?.color ?? data.outlook?.color }}>
-                      {data.outlook?.water_now?.label ?? data.outlook?.label ?? '--'}
+                    <span className="outlook-panel-value" style={{ color: waterOutlook?.water_now?.color ?? waterOutlook?.color }}>
+                      {waterOutlook?.water_now?.label ?? waterOutlook?.label ?? '--'}
                     </span>
-                    <span className="outlook-panel-meta">{data.outlook?.water_now?.summary ?? data.outlook?.reason}</span>
+                    <span className="outlook-panel-meta">{waterOutlook?.water_now?.summary ?? waterOutlook?.reason}</span>
                     <span className="outlook-panel-note">Official beach flag</span>
                   </div>
-                  <div className="outlook-panel" style={{ borderColor: data.outlook?.plan_today?.color ?? '#64748b' }}>
-                    <span className="outlook-panel-label">{data.outlook?.plan_label ?? 'Plan for today'}</span>
-                    <span className="outlook-panel-value" style={{ color: data.outlook?.plan_today?.color ?? '#94a3b8' }}>
-                      {data.outlook?.plan_today?.status ?? '--'}
+                  <div className="outlook-panel" style={{ borderColor: planOutlook?.plan_today?.color ?? '#64748b' }}>
+                    <span className="outlook-panel-label">{planOutlook?.plan_label ?? 'Plan for today'}</span>
+                    <span className="outlook-panel-value" style={{ color: planOutlook?.plan_today?.color ?? '#94a3b8' }}>
+                      {planOutlook?.plan_today?.status ?? '--'}
                     </span>
-                    <span className="outlook-panel-meta">{data.outlook?.plan_today?.headline ?? '--'}</span>
-                    {data.outlook?.plan_today?.forecast && (
-                      <span className="outlook-panel-note">{data.outlook.plan_today.forecast}</span>
+                    <span className="outlook-panel-meta">{planOutlook?.plan_today?.headline ?? '--'}</span>
+                    {planOutlook?.plan_today?.forecast && (
+                      <span className="outlook-panel-note">{planOutlook.plan_today.forecast}</span>
                     )}
-                    {data.outlook?.plan_today?.hourly_lines && data.outlook.plan_today.hourly_lines.length > 0 ? (
+                    {planningHorizon === 'today' && planOutlook?.plan_today?.hourly_lines && planOutlook.plan_today.hourly_lines.length > 0 ? (
                       <div className="hourly-forecast">
                         <span className="outlook-panel-note hourly-forecast-label">Next few hours</span>
                         <ul className="hourly-forecast-list">
-                          {data.outlook.plan_today.hourly_lines.map((line, i) => (
+                          {planOutlook.plan_today.hourly_lines.map((line, i) => (
                             <li key={i} className="hourly-forecast-item">
                               <span className="hourly-forecast-time">{line.time}</span>
                               <span className="hourly-forecast-desc">
@@ -574,20 +647,20 @@ function App() {
                           ))}
                         </ul>
                       </div>
-                    ) : data.outlook?.plan_today?.hourly ? (
-                      <span className="outlook-panel-note">Next few hours: {data.outlook.plan_today.hourly}</span>
+                    ) : planningHorizon === 'today' && planOutlook?.plan_today?.hourly ? (
+                      <span className="outlook-panel-note">Next few hours: {planOutlook.plan_today.hourly}</span>
                     ) : null}
-                    {data.outlook?.radar_proximity?.storm_nearby && (
+                    {planningHorizon === 'today' && planOutlook?.radar_proximity?.storm_nearby && (
                       <span className="outlook-panel-note">
-                        Radar: {data.outlook.radar_proximity.max_dbz} dBZ within {data.outlook.radar_proximity.radius_miles} mi
+                        Radar: {planOutlook.radar_proximity.max_dbz} dBZ within {planOutlook.radar_proximity.radius_miles} mi
                       </span>
                     )}
                   </div>
                 </div>
 
-                {data.outlook?.active_alerts && data.outlook.active_alerts.length > 0 && (
+                {planOutlook?.active_alerts && planOutlook.active_alerts.length > 0 && (
                   <div className="active-alerts">
-                    {data.outlook.active_alerts.map((alert, i) => (
+                    {planOutlook.active_alerts.map((alert, i) => (
                       <p key={i} className="active-alert-item">
                         <Zap size={14} />
                         <span><strong>{alert.event}:</strong> {alert.headline}</span>
@@ -598,24 +671,24 @@ function App() {
 
                 <div className="activity-status-line">
                    <div className="status-item">
-                      <span className={`dot ${activityStatus(data.outlook?.activities, 'paddling')}`}></span> Paddling
+                      <span className={`dot ${activityStatus(planOutlook?.activities, 'paddling')}`}></span> Paddling
                    </div>
                    <span className="divider-sm">|</span>
                    <div className="status-item">
-                      <span className={`dot ${activityStatus(data.outlook?.activities, 'swimming')}`}></span> Swimming
+                      <span className={`dot ${activityStatus(planOutlook?.activities, 'swimming')}`}></span> Swimming
                    </div>
                    <span className="divider-sm">|</span>
                    <div className="status-item">
-                      <span className={`dot ${activityStatus(data.outlook?.activities, 'beach')}`}></span> Beach
+                      <span className={`dot ${activityStatus(planOutlook?.activities, 'beach')}`}></span> Beach
                    </div>
                 </div>
-                {data.outlook?.activities_summary ? (
-                  <p className="activity-note">{data.outlook.activities_summary}</p>
+                {planOutlook?.activities_summary ? (
+                  <p className="activity-note">{planOutlook.activities_summary}</p>
                 ) : (
                   <div className="activity-reasons">
                     {(['paddling', 'swimming', 'beach'] as const).map(key => {
-                      const reason = activityReason(data.outlook?.activities, key);
-                      if (!reason || activityStatus(data.outlook?.activities, key) === 'Green') return null;
+                      const reason = activityReason(planOutlook?.activities, key);
+                      if (!reason || activityStatus(planOutlook?.activities, key) === 'Green') return null;
                       return (
                         <p key={key} className="activity-note">
                           <strong>{key.charAt(0).toUpperCase() + key.slice(1)}:</strong> {reason}

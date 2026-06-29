@@ -923,6 +923,21 @@ def _get_red_tide_status(config: dict) -> str:
         pass
     return "Not Present"
 
+def _describe_wave_period(period: Optional[float]) -> str:
+    if period is None or period <= 0:
+        return ""
+    p = round(period, 1)
+    if p < 6:
+        return (
+            f"{p} sec between wave crests — short-period chop from nearby wind, "
+            "not long rolling swell"
+        )
+    if p < 9:
+        return f"{p} sec between wave crests — moderately spaced, somewhat organized waves"
+    if p < 13:
+        return f"{p} sec between wave crests — longer-period swell, cleaner and more powerful"
+    return f"{p} sec between wave crests — long ground swell with more energy per wave"
+
 def _get_marine_data(config: dict):
     try:
         url = (
@@ -1248,10 +1263,11 @@ def refresh_one_beach(beach_id: str) -> dict:
             "skywatch": _get_skywatch(),
             "surf": {
                 "height": round(wave_ft, 1),
-                "period": period,
+                "period": round(period, 1) if period else None,
+                "period_note": _describe_wave_period(period),
                 "intensity": mote["intensity"],
                 "type": mote["type"],
-                "rip_current": forecast["rip_current"]
+                "rip_current": forecast["rip_current"],
             },
             "weather": {"temp_f": temp_f, "wind_mph": wind_mph, "wind_dir": wind_dir},
             "red_tide": {"status": red_tide},

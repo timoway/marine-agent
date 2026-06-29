@@ -76,7 +76,7 @@ interface MarineData {
   tides: { predictions: any[]; water_temp: string; water_temp_source?: string; current_status: string; trend: string; next_event: string; source: string; };
   forecast: { summary: string; rip_current: string; source: string; };
   skywatch: { moon_phase: string; illumination: string; planets_visible: string; upcoming_event: string; };
-  surf: { height: number; period: number; intensity: string; type: string; rip_current: string; };
+  surf: { height: number; period: number; period_note?: string; intensity: string; type: string; rip_current: string; };
   weather: { temp_f: number; wind_mph: number; wind_dir: string; };
   red_tide: { status: string; };
   mote_extras: { water: string; algae: string; algae_type: string; jellyfish?: string; };
@@ -645,7 +645,12 @@ function App() {
               <div className="card">
                 <div className="card-title"><Waves size={18} /> Surf</div>
                 <div className="card-value">{data.surf?.intensity ?? 'Unknown'}</div>
-                <div className="card-subvalue">{data.surf?.type ?? '--'} | {data.surf?.height ?? '--'}ft | {data.surf?.period ?? '--'}s period</div>
+                <div className="card-subvalue">
+                  {data.surf?.type ?? '--'} · {data.surf?.height ?? '--'} ft · {data.surf?.period ?? '--'} sec between waves
+                </div>
+                {data.surf?.period_note && (
+                  <div className="surf-note">{data.surf.period_note}</div>
+                )}
                 <div className="activity-list" style={{ marginTop: '12px' }}>
                    <div className="activity-item">
                       <AlertTriangle size={16} color={data.surf?.rip_current?.includes('High') ? '#f87171' : '#4ade80'} />

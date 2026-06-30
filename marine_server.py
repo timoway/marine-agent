@@ -1231,32 +1231,124 @@ def _get_marine_data(config: dict):
     except Exception:
         return 0.5, 4.0, None
 
+def _wind_dir_from_deg(wind_deg: Optional[float]) -> str:
+    return ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][round((wind_deg or 0) / 45) % 8]
+
+
+def _parse_nws_wind_mph(wind_text: Optional[str]) -> Optional[float]:
+    if not wind_text:
+        return None
+    match = re.search(r"(\d+(?:\.\d+)?)", wind_text)
+    return round(float(match.group(1)), 1) if match else None
+
+
+def _get_open_meteo_weather(config: dict) -> Optional[dict]:
+    url = (
+        f"https://api.open-meteo.com/v1/forecast?latitude={config['lat']}&longitude={config['lon']}"
+        "&current=temperature_2m,wind_speed_10m,wind_direction_10m"
+        "&wind_speed_unit=mph&temperature_unit=fahrenheit"
+    )
+    try:
+        r = requests.get(url, timeout=5).json()
+        current = r.get("current", {})
+        temp_f = current.get("temperature_2m")
+        wind_mph = current.get("wind_speed_10m")
+        wind_deg = current.get("wind_direction_10m")
+        if temp_f is None or wind_mph is None:
+            return None
+        return {
+            "temp_f": round(float(temp_f), 1),
+            "wind_mph": round(float(wind_mph), 1),
+            "wind_dir": _wind_dir_from_deg(wind_deg),
+            "meta": _source_meta(True, url),
+        }
+    except Exception:
+        return None
+
+
+def _get_nws_hourly_weather(config: dict) -> Optional[dict]:
+    points_url = f"https://api.weather.gov/points/{config['lat']},{config['lon']}"
+    try:
+        points_r = requests.get(points_url, headers={'User-Agent': 'MarineAgent/1.0'}, timeout=8).json()
+        hourly_url = points_r.get('properties', {}).get('forecastHourly')
+        if not hourly_url:
+            return None
+        h_r = requests.get(hourly_url, headers={'User-Agent': 'MarineAgent/1.0'}, timeout=8).json()
+        period = h_r.get('properties', {}).get('periods', [{}])[0]
+        temp_f = period.get('temperature')
+        wind_mph = _parse_nws_wind_mph(period.get('windSpeed'))
+        wind_dir = period.get('windDirection')
+        if temp_f is None or wind_mph is None or not wind_dir:
+            return None
+        return {
+            "temp_f": round(float(temp_f), 1),
+            "wind_mph": wind_mph,
+            "wind_dir": wind_dir,
+            "meta": _source_meta(True, hourly_url),
+        }
+    except Exception:
+        return None
+
+
+def _merge_weather_obs(primary: dict, fallback: dict, *, fallback_name: str, station_url: str) -> dict:
+    merged = {
+        "temp_f": primary.get("temp_f") if primary.get("temp_f") is not None else fallback.get("temp_f"),
+        "wind_mph": primary.get("wind_mph") if primary.get("wind_mph") is not None else fallback.get("wind_mph"),
+        "wind_dir": primary.get("wind_dir") if primary.get("wind_dir") not in (None, "N/A") else fallback.get("wind_dir"),
+    }
+    if merged["temp_f"] is None or merged["wind_mph"] is None:
+        return primary
+    meta = fallback.get("meta", _source_meta(True, station_url)).copy()
+    meta["fallback"] = fallback_name
+    meta["note"] = f"NWS station observation incomplete; filled from {fallback_name}"
+    meta["station_url"] = station_url
+    merged["meta"] = meta
+    return merged
+
+
 def _get_nws_obs(config: dict) -> dict:
     url = f"https://api.weather.gov/stations/{config['nws_station']}/observations/latest"
+    partial = {
+        "temp_f": None,
+        "wind_mph": None,
+        "wind_dir": "N/A",
+    }
     try:
         r = requests.get(url, headers={'User-Agent': 'MarineAgent/1.0'}, timeout=5).json()
         p = r.get('properties', {})
         raw_temp = p.get('temperature', {}).get('value')
-        temp_f = round((raw_temp * 9/5) + 32, 1) if raw_temp is not None else None
+        partial["temp_f"] = round((raw_temp * 9/5) + 32, 1) if raw_temp is not None else None
         raw_wind = p.get('windSpeed', {}).get('value')
-        wind_mph = round(raw_wind / 1.6, 1) if raw_wind is not None else None
-        wind_deg = p.get('windDirection', {}).get('value', 0)
-        wind_dir = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][round((wind_deg or 0) / 45) % 8]
-        if temp_f is None or wind_mph is None:
-            raise ValueError("incomplete observation")
-        return {
-            "temp_f": temp_f,
-            "wind_mph": wind_mph,
-            "wind_dir": wind_dir,
-            "meta": _source_meta(True, url),
-        }
-    except Exception as exc:
-        return {
-            "temp_f": None,
-            "wind_mph": None,
-            "wind_dir": "N/A",
-            "meta": _source_meta(False, url, str(exc)[:120]),
-        }
+        partial["wind_mph"] = round(raw_wind / 1.6, 1) if raw_wind is not None else None
+        wind_deg = p.get('windDirection', {}).get('value')
+        if wind_deg is not None:
+            partial["wind_dir"] = _wind_dir_from_deg(wind_deg)
+        if partial["temp_f"] is not None and partial["wind_mph"] is not None:
+            return {
+                **partial,
+                "meta": _source_meta(True, url),
+            }
+    except Exception:
+        pass
+
+    hourly = _get_nws_hourly_weather(config)
+    if hourly:
+        merged = _merge_weather_obs(partial, hourly, fallback_name="nws_hourly", station_url=url)
+        if merged.get("temp_f") is not None and merged.get("wind_mph") is not None:
+            return merged
+
+    open_meteo = _get_open_meteo_weather(config)
+    if open_meteo:
+        merged = _merge_weather_obs(partial, open_meteo, fallback_name="open_meteo", station_url=url)
+        if merged.get("temp_f") is not None and merged.get("wind_mph") is not None:
+            return merged
+
+    return {
+        "temp_f": None,
+        "wind_mph": None,
+        "wind_dir": "N/A",
+        "meta": _source_meta(False, url, "incomplete observation"),
+    }
 
 STORM_ALERT_EVENTS = frozenset({
     "Special Marine Warning",

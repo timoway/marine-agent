@@ -36,8 +36,30 @@ SAFETY_DISCLAIMER = (
     "Advisory only — verify official beach flags, lifeguards, and NWS alerts before entering the water."
 )
 FWC_HAB_URL = (
-    "https://atoll.floridamarine.org/arcgis/rest/services/Projects_FWC/HAB_Current/FeatureServer/0/query"
+    "https://services7.arcgis.com/4RQmZZ0yaZkGR1zy/arcgis/rest/services/"
+    "HAB_KbrevisPROD_View/FeatureServer/0/query"
 )
+MOTE_GQL_URL = "https://api.visitbeaches.org/graphql"
+MOTE_BEACH_QUERY = """
+query GetBeach($id: ID!) {
+  beach(id: $id) {
+    id
+    name
+    lastThreeDaysOfReports {
+      id
+      createdAt
+      beachReport {
+        parameterCategory { name }
+        reportParameters {
+          parameter { name }
+          display
+          value
+        }
+      }
+    }
+  }
+}
+"""
 DATA_STALE_SECONDS = 300
 
 
@@ -129,27 +151,27 @@ NWS_STATIONS = {
 }
 
 BEACH_CONFIG = {
-    "venice": {"name": "Venice Beach", "mote_id": "33", "tide_id": "8725889", "county": "Sarasota", "lat": 27.1001, "lon": -82.4542, "nws_station": "KVNC", "shark_teeth": True},
-    "manasota-key": {"name": "Manasota Key Beach", "mote_id": "6", "tide_id": "8725889", "county": "Sarasota", "lat": 27.0125, "lon": -82.4131, "nws_station": "KVNC", "shark_teeth": True},
+    "venice": {"name": "Venice Beach", "mote_id": "6", "tide_id": "8725889", "county": "Sarasota", "lat": 27.1001, "lon": -82.4542, "nws_station": "KVNC", "shark_teeth": True},
+    "manasota-key": {"name": "Manasota Key Beach", "mote_id": "3", "tide_id": "8725889", "county": "Sarasota", "lat": 27.0125, "lon": -82.4131, "nws_station": "KVNC", "shark_teeth": True},
     "siesta": {"name": "Siesta Key Beach", "mote_id": "2", "tide_id": "8726034", "county": "Sarasota", "lat": 27.2662, "lon": -82.5658, "nws_station": "KSRQ", "shark_teeth": False},
-    "lido": {"name": "Lido Key Beach", "mote_id": "32", "tide_id": "8726034", "county": "Sarasota", "lat": 27.3188, "lon": -82.5786, "nws_station": "KSRQ", "shark_teeth": False},
-    "caspersen": {"name": "Caspersen Beach", "mote_id": "34", "tide_id": "8725889", "county": "Sarasota", "lat": 27.0700, "lon": -82.4497, "nws_station": "KVNC", "shark_teeth": True},
-    "nokomis": {"name": "Nokomis Beach", "mote_id": "35", "tide_id": "8725889", "county": "Sarasota", "lat": 27.1264, "lon": -82.4644, "nws_station": "KVNC", "shark_teeth": True},
-    "englewood": {"name": "Englewood Beach", "mote_id": "7", "tide_id": "8725889", "county": "Charlotte", "lat": 26.9242, "lon": -82.3619, "nws_station": "KPGD", "shark_teeth": True},
-    "fort-myers": {"name": "Fort Myers Beach", "mote_id": "145", "tide_id": "8725325", "county": "Lee", "lat": 26.4526, "lon": -81.9484, "nws_station": "KFMY", "shark_teeth": False},
-    "bonita": {"name": "Bonita Beach", "mote_id": "144", "tide_id": "8725110", "county": "Lee", "lat": 26.3308, "lon": -81.8447, "nws_station": "KAPF", "shark_teeth": False},
-    "vanderbilt": {"name": "Vanderbilt Beach", "mote_id": "114", "tide_id": "8725110", "county": "Collier", "lat": 26.2558, "lon": -81.8253, "nws_station": "KAPF", "shark_teeth": False},
-    "barefoot": {"name": "Barefoot Beach", "mote_id": "144", "tide_id": "8725110", "county": "Collier", "lat": 26.3158, "lon": -81.8353, "nws_station": "KAPF", "shark_teeth": False},
-    "bradenton": {"name": "Bradenton Beach", "mote_id": "4", "tide_id": "8726243", "county": "Manatee", "lat": 27.4695, "lon": -82.6987, "nws_station": "KSRQ", "shark_teeth": False},
-    "anna-maria": {"name": "Anna Maria Island", "mote_id": "3", "tide_id": "8726282", "county": "Manatee", "lat": 27.5273, "lon": -82.7154, "nws_station": "KSRQ", "shark_teeth": False},
-    "holmes": {"name": "Holmes Beach", "mote_id": "5", "tide_id": "8726243", "county": "Manatee", "lat": 27.4984, "lon": -82.7126, "nws_station": "KSRQ", "shark_teeth": False},
-    "st-pete": {"name": "St. Pete Beach", "mote_id": "42", "tide_id": "8726520", "county": "Pinellas", "lat": 27.7253, "lon": -82.7412, "nws_station": "KSPG", "shark_teeth": False},
-    "clearwater": {"name": "Clearwater Beach", "mote_id": "45", "tide_id": "8726724", "county": "Pinellas", "lat": 27.9781, "lon": -82.8317, "nws_station": "KPIE", "shark_teeth": False},
-    "indian-rocks": {"name": "Indian Rocks Beach", "mote_id": "46", "tide_id": "8726724", "county": "Pinellas", "lat": 27.8931, "lon": -82.8482, "nws_station": "KPIE", "shark_teeth": False},
-    "madeira": {"name": "Madeira Beach", "mote_id": "44", "tide_id": "8726520", "county": "Pinellas", "lat": 27.7945, "lon": -82.7840, "nws_station": "KSPG", "shark_teeth": False},
-    "destin": {"name": "Destin", "mote_id": "100", "tide_id": "8729511", "county": "Okaloosa", "lat": 30.3935, "lon": -86.4958, "nws_station": "KDTS", "shark_teeth": False},
-    "pensacola": {"name": "Pensacola Beach", "mote_id": "101", "tide_id": "8729840", "county": "Escambia", "lat": 30.3327, "lon": -87.1414, "nws_station": "KPNS", "shark_teeth": False},
-    "panama-city": {"name": "Panama City Beach", "mote_id": "102", "tide_id": "8729210", "county": "Bay", "lat": 30.1766, "lon": -85.8055, "nws_station": "KECP", "shark_teeth": False}
+    "lido": {"name": "Lido Key Beach", "mote_id": "4", "tide_id": "8726034", "county": "Sarasota", "lat": 27.3188, "lon": -82.5786, "nws_station": "KSRQ", "shark_teeth": False},
+    "caspersen": {"name": "Caspersen Beach", "mote_id": "40", "tide_id": "8725889", "county": "Sarasota", "lat": 27.0700, "lon": -82.4497, "nws_station": "KVNC", "shark_teeth": True},
+    "nokomis": {"name": "Nokomis Beach", "mote_id": "5", "tide_id": "8725889", "county": "Sarasota", "lat": 27.1264, "lon": -82.4644, "nws_station": "KVNC", "shark_teeth": True},
+    "englewood": {"name": "Englewood Beach", "mote_id": "42", "tide_id": "8725889", "county": "Charlotte", "lat": 26.9242, "lon": -82.3619, "nws_station": "KPGD", "shark_teeth": True},
+    "fort-myers": {"name": "Fort Myers Beach", "mote_id": "11", "tide_id": "8725325", "county": "Lee", "lat": 26.4526, "lon": -81.9484, "nws_station": "KFMY", "shark_teeth": False},
+    "bonita": {"name": "Bonita Beach", "mote_id": "14", "tide_id": "8725110", "county": "Lee", "lat": 26.3308, "lon": -81.8447, "nws_station": "KAPF", "shark_teeth": False},
+    "vanderbilt": {"name": "Vanderbilt Beach", "mote_id": "29", "tide_id": "8725110", "county": "Collier", "lat": 26.2558, "lon": -81.8253, "nws_station": "KAPF", "shark_teeth": False},
+    "barefoot": {"name": "Barefoot Beach", "mote_id": "28", "tide_id": "8725110", "county": "Collier", "lat": 26.3158, "lon": -81.8353, "nws_station": "KAPF", "shark_teeth": False},
+    "bradenton": {"name": "Bradenton Beach", "mote_id": "64", "tide_id": "8726243", "county": "Manatee", "lat": 27.4695, "lon": -82.6987, "nws_station": "KSRQ", "shark_teeth": False},
+    "anna-maria": {"name": "Anna Maria Island", "mote_id": "62", "tide_id": "8726282", "county": "Manatee", "lat": 27.5273, "lon": -82.7154, "nws_station": "KSRQ", "shark_teeth": False},
+    "holmes": {"name": "Holmes Beach", "mote_id": "142", "tide_id": "8726243", "county": "Manatee", "lat": 27.4984, "lon": -82.7126, "nws_station": "KSRQ", "shark_teeth": False},
+    "st-pete": {"name": "St. Pete Beach", "mote_id": "35", "tide_id": "8726520", "county": "Pinellas", "lat": 27.7253, "lon": -82.7412, "nws_station": "KSPG", "shark_teeth": False},
+    "clearwater": {"name": "Clearwater Beach", "mote_id": "7", "tide_id": "8726724", "county": "Pinellas", "lat": 27.9781, "lon": -82.8317, "nws_station": "KPIE", "shark_teeth": False},
+    "indian-rocks": {"name": "Indian Rocks Beach", "mote_id": "33", "tide_id": "8726724", "county": "Pinellas", "lat": 27.8931, "lon": -82.8482, "nws_station": "KPIE", "shark_teeth": False},
+    "madeira": {"name": "Madeira Beach", "mote_id": "34", "tide_id": "8726520", "county": "Pinellas", "lat": 27.7945, "lon": -82.7840, "nws_station": "KSPG", "shark_teeth": False},
+    "destin": {"name": "Destin", "mote_id": "19", "tide_id": "8729511", "county": "Okaloosa", "lat": 30.3935, "lon": -86.4958, "nws_station": "KDTS", "shark_teeth": False},
+    "pensacola": {"name": "Pensacola Beach", "mote_id": "18", "tide_id": "8729840", "county": "Escambia", "lat": 30.3327, "lon": -87.1414, "nws_station": "KPNS", "shark_teeth": False},
+    "panama-city": {"name": "Panama City Beach", "mote_id": "73", "tide_id": "8729210", "county": "Bay", "lat": 30.1766, "lon": -85.8055, "nws_station": "KECP", "shark_teeth": False}
 }
 
 # --- HELPERS ---
@@ -1105,21 +1127,60 @@ def get_beach_key(beach_name: str) -> Optional[str]:
     return None
 
 # --- FETCHERS (public APIs, resilient) ---
+def _extract_mote_parameters(report: dict) -> dict:
+    params = {}
+    for category in report.get("beachReport", []) or []:
+        for rp in category.get("reportParameters", []) or []:
+            name = (rp.get("parameter") or {}).get("name")
+            if not name:
+                continue
+            params[name] = rp.get("display") or rp.get("value") or "Unknown"
+    return params
+
+
+def _normalize_mote_report(params: dict, *, source_url: str, beach_name: str = "") -> dict:
+    water_color = params.get("Water Color", "Unknown")
+    if str(water_color).lower() == "clear":
+        water = "Clear Water"
+    else:
+        water = water_color
+    drift_algae = str(params.get("Drift Algae", "None"))
+    algae = "No Algae Observed" if drift_algae.lower() == "none" else "Algae Present"
+    meta = _source_meta(True, source_url)
+    if beach_name:
+        meta["beach_name"] = beach_name
+    return {
+        "intensity": params.get("Surf Intensity", "Unknown"),
+        "type": params.get("Surf Type", "Unknown"),
+        "water": water,
+        "algae": algae,
+        "algae_type": params.get("Drift Algae Type", "N/A"),
+        "jellyfish": params.get("Jellyfish", "None"),
+        "meta": meta,
+    }
+
+
 def _get_mote_report(config: dict) -> dict:
-    url = f"https://visitbeaches.org/api/reports?locationId={config['mote_id']}&latest=true"
     try:
-        r = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5).json()
-        if isinstance(r, list) and len(r) > 0:
-            report = r[0]
-            return {
-                "intensity": report.get("surfIntensity", "Light"),
-                "type": report.get("surfType", "Wind Swell"),
-                "water": "Clear Water" if report.get("waterColor") == "Clear" else report.get("waterColor", "Greenish Blue"),
-                "algae": "No Algae Observed" if report.get("driftAlgae") == "None" else "Algae Present",
-                "algae_type": report.get("driftAlgaeType", "N/A"),
-                "jellyfish": report.get("jellyfish", "None"),
-                "meta": _source_meta(True, url),
-            }
+        r = requests.post(
+            MOTE_GQL_URL,
+            json={"query": MOTE_BEACH_QUERY, "variables": {"id": str(config["mote_id"])}},
+            headers={"Content-Type": "application/json", "User-Agent": "MarineAgent/1.0"},
+            timeout=8,
+        )
+        r.raise_for_status()
+        payload = r.json()
+        if payload.get("errors"):
+            raise ValueError(payload["errors"][0].get("message", "graphql error"))
+        beach = payload.get("data", {}).get("beach")
+        reports = (beach or {}).get("lastThreeDaysOfReports") or []
+        if not beach or not reports:
+            raise ValueError("no recent beach report")
+        return _normalize_mote_report(
+            _extract_mote_parameters(reports[0]),
+            source_url=MOTE_GQL_URL,
+            beach_name=beach.get("name", ""),
+        )
     except Exception as exc:
         return {
             "intensity": "Unknown",
@@ -1128,47 +1189,69 @@ def _get_mote_report(config: dict) -> dict:
             "algae": "Unknown",
             "algae_type": "N/A",
             "jellyfish": "Unknown",
-            "meta": _source_meta(False, url, str(exc)[:120]),
+            "meta": _source_meta(False, MOTE_GQL_URL, str(exc)[:120]),
         }
-    return {
-        "intensity": "Unknown",
-        "type": "Unknown",
-        "water": "Unknown",
-        "algae": "Unknown",
-        "algae_type": "N/A",
-        "jellyfish": "Unknown",
-        "meta": _source_meta(False, url, "empty report"),
-    }
+
+
+def _map_hab_concentration(concentration: Optional[str], density: Optional[int]) -> str:
+    label = (concentration or "").strip().lower()
+    if "not present" in label or "background" in label:
+        return "Not Present"
+    if "very low" in label:
+        return "Low"
+    if re.search(r"\blow\b", label):
+        return "Low"
+    if "medium" in label or "high" in label:
+        return "Medium/High"
+    if "testing not performed" in label:
+        return "Unknown"
+    if density is not None:
+        if density > 100000:
+            return "Medium/High"
+        if density > 10000:
+            return "Low"
+        if density >= 0:
+            return "Not Present"
+    return "Unknown"
+
 
 def _get_red_tide_status(config: dict) -> dict:
     params = {
-        "where": f"County = '{config['county']}'",
-        "outFields": "Count_",
-        "orderByFields": "SampleDate DESC",
-        "resultRecordCount": 1,
+        "geometry": f"{config['lon']},{config['lat']}",
+        "geometryType": "esriGeometryPoint",
+        "inSR": 4326,
+        "spatialRel": "esriSpatialRelIntersects",
+        "distance": 100,
+        "units": "esriSRUnit_Kilometer",
+        "outFields": "Site,Concentrations,DensityPerLiter,Collection_Date,Latitude,Longitude",
+        "orderByFields": "Collection_Date DESC",
+        "resultRecordCount": 5,
         "f": "json",
     }
     try:
         r = requests.get(FWC_HAB_URL, params=params, timeout=8).json()
-        feat = r.get('features', [])
-        if feat:
-            cnt = feat[0]['attributes']['Count_']
-            if cnt > 100000:
-                status = "Medium/High"
-            elif cnt > 10000:
-                status = "Low"
-            else:
-                status = "Not Present"
-            return {"status": status, "meta": _source_meta(True, FWC_HAB_URL)}
+        if r.get("error"):
+            raise ValueError(r["error"].get("message", "hab query failed"))
+        features = r.get("features", [])
+        for feat in features:
+            attrs = feat.get("attributes", {})
+            status = _map_hab_concentration(
+                attrs.get("Concentrations"),
+                attrs.get("DensityPerLiter"),
+            )
+            if status != "Unknown":
+                meta = _source_meta(True, FWC_HAB_URL)
+                meta["site"] = attrs.get("Site")
+                meta["concentration"] = attrs.get("Concentrations")
+                return {"status": status, "meta": meta}
+        meta = _source_meta(True, FWC_HAB_URL)
+        meta["note"] = "No FWC samples within 100 km in the current 8-day map window"
+        return {"status": "Not Present", "meta": meta}
     except Exception as exc:
         return {
             "status": "Unknown",
             "meta": _source_meta(False, FWC_HAB_URL, str(exc)[:120]),
         }
-    return {
-        "status": "Unknown",
-        "meta": _source_meta(False, FWC_HAB_URL, "no county sample returned"),
-    }
 
 def _describe_wave_period(period: Optional[float]) -> str:
     if period is None or period <= 0:

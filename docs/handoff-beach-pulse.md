@@ -37,7 +37,7 @@ These require a person at a dashboard; they can't be scripted here. Everything a
    - Project URL
    - `anon` public key
    - `service_role` secret key
-5. From **Project Settings → API → JWT Settings**, copy the **JWT Secret** (backend uses it to verify tokens).
+5. **JWT verification — no secret needed.** This project uses Supabase's asymmetric **JWT Signing Keys** (check Project Settings → API → JWT Keys: if the current key's Type is `ECC (P-256)` or `RSA`, not `Legacy HS256 (Shared Secret)`, you're on this model). The backend verifies tokens against the public **JWKS endpoint** (`{SUPABASE_URL}/auth/v1/.well-known/jwks.json`) instead of a shared secret — nothing to copy here, no `SUPABASE_JWT_SECRET` env var. If your project instead shows `Legacy HS256 (Shared Secret)` as the *current* (not previously-used) key, copy the Legacy JWT Secret tab's value instead and use HS256 verification in §3c.
 
 ### 1b. Google OAuth (for Sign in with Google)
 Project ref: **`mubvodgysgdlxwpzgawg`** (`https://mubvodgysgdlxwpzgawg.supabase.co`).
@@ -55,7 +55,6 @@ Project ref: **`mubvodgysgdlxwpzgawg`** (`https://mubvodgysgdlxwpzgawg.supabase.
 |-----|----------------|----------------|---------|
 | `SUPABASE_URL` | Render (backend) | `https://mubvodgysgdlxwpzgawg.supabase.co` | no |
 | `SUPABASE_SERVICE_ROLE_KEY` | Render (backend) | `service_role` key | **yes** |
-| `SUPABASE_JWT_SECRET` | Render (backend) | JWT Secret | **yes** |
 | `VITE_SUPABASE_URL` | Vercel (web) | `https://mubvodgysgdlxwpzgawg.supabase.co` | no |
 | `VITE_SUPABASE_ANON_KEY` | Vercel (web) | `anon` key | no (anon is public by design) |
 
@@ -118,7 +117,7 @@ create policy "insert own reports" on public.reports
 ## 3. Backend — `marine_server.py` (Phase A write path + Phase B read path)
 
 ### 3a. Dependencies
-Add to `requirements.txt`: `supabase` (supabase-py, for DB access) and `pyjwt` (verify tokens). CORS is already `allow_origins=["*"]` at [marine_server.py:1829](../marine_server.py) — no change.
+Add to `requirements.txt`: `supabase` (supabase-py, for DB access), `pyjwt` (verify tokens — needs the `cryptography` extra for ES256: `pyjwt[crypto]`). CORS is already `allow_origins=["*"]` at [marine_server.py:1829](../marine_server.py) — no change.
 
 ### 3b. Constants (new module `reports.py`, imported by `marine_server.py`)
 All tunable in one place — these are starting values from `plan.md`, not sacred.
@@ -144,8 +143,18 @@ CORROBORATION_WINDOWS_MIN = {    # type-specific freshness for corroboration/esc
 }
 ```
 
-### 3c. JWT verification dependency
-A FastAPI dependency that reads `Authorization: Bearer <jwt>`, verifies HS256 against `SUPABASE_JWT_SECRET`, returns the `sub` claim (the user uuid) as `reporter_id`. On failure → `HTTPException(401)`. Reuse the existing `HTTPException` import.
+### 3c. JWT verification dependency — JWKS-based (no shared secret)
+This project uses Supabase's asymmetric JWT Signing Keys (ECC P-256), not the legacy HS256 shared secret — so there's no static secret to store, and verification instead fetches Supabase's public keys.
+
+A FastAPI dependency that reads `Authorization: Bearer <jwt>` and:
+1. Uses `jwt.PyJWKClient(f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json")` to fetch the signing key matching the token's `kid` header (PyJWKClient caches this — no network round-trip per request after the first).
+2. `jwt.decode(token, signing_key.key, algorithms=["ES256"], audience="authenticated")` — verifies signature, expiry, and audience.
+3. Returns the `sub` claim (the user uuid) as `reporter_id`.
+4. On any failure (bad signature, expired, wrong audience) → `HTTPException(401)`. Reuse the existing `HTTPException` import.
+
+This also covers key rotation for free: Supabase's JWKS endpoint publishes both the current key and any "previously used" keys still valid for verification (per the dashboard's "Previously used keys" section), and `PyJWKClient` looks up by `kid` automatically — no code change needed when Supabase rotates keys.
+
+> If a future project instead shows `Legacy HS256 (Shared Secret)` as the *current* key (not previously-used), skip JWKS and instead verify with `jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")` using the Legacy JWT Secret from §1a step 5.
 
 ### 3d. New endpoints
 

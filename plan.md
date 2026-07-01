@@ -25,7 +25,19 @@
 
 ## Next up (priority order)
 
-### 1. In-app chat — highest product gap
+### 1. Beach Pulse — user reports (killer differentiator)
+**Goal:** the actual bet — fuse NOAA/NWS data with real-time community reports into one trustworthy signal, in a way Mote's broken report flow doesn't. Full spec: *Beach Pulse — full spec* section below. Broken into shippable phases, in dependency order:
+
+| Phase | Scope | Effort |
+|-------|-------|--------|
+| A — Foundation | Supabase project + `reports` table/RLS, Sign in with Apple/Google, `POST /api/reports` with severity-tier publish logic + rate/spike limits | ~2.5 days |
+| B — Ship MVP | `GET /api/reports/{beach_id}` + `/api/conditions` integration, Report FAB, Beach Pulse badge (adjacent to verdict), `reports_enabled: true` default across all `BEACH_CONFIG` beaches | ~2 days |
+| C — Trust layer | `reporter_beach_standing` table + Local Guide auto-promotion, community reports list with 🏅 marking | ~0.5 day |
+| D — Historical (defer) | Daily aggregate job, history endpoint, trend sparkline — lowest priority; needs weeks/months of data to be meaningful regardless of when it's built | ~1.5 days |
+
+Phases A+B are the MVP — a beach card with a working, visible Beach Pulse badge. C and D are follow-ons once real usage exists.
+
+### 2. In-app chat — highest product gap
 **Goal:** “Best paddle near Venice today?” inside the PWA.
 
 | Step | Effort | Notes |
@@ -36,26 +48,26 @@
 
 **Skip for production:** Streamlit (dev-only). **Optional fast path:** Telegram bot for share-with-family.
 
-### 2. Tomorrow polish (v1.1)
+### 3. Tomorrow polish (v1.1)
 - [ ] Tomorrow **wind** from NWS period text or Open-Meteo (rank still uses current wind obs)
 - [ ] Hero **Detailed Forecast** card: show tomorrow period when planning toggle = Tomorrow
 - [ ] Dedupe Water & Algae card JSX in `App.tsx` (minor refactor)
 
-### 3. Atlantic coast expansion
+### 4. Atlantic coast expansion
 - [ ] Add East Coast beaches to `BEACH_CONFIG` (tide stations, NWS points, Mote fallbacks)
 - [ ] `coast` filter on `/api/rank` (param exists, not fully used)
 
-### 4. Ops / quality backlog
+### 5. Ops / quality backlog
 - [ ] README: align copy (“Today’s outlook” not “Today’s Verdict” everywhere)
 - [ ] FWC red tide SSL (`verify=False` workaround)
 - [ ] `get_beach_key()` fuzzy-match edge cases (e.g. substring “key”)
 - [ ] Hardcoded skywatch events → ephemeris or remove
 - [ ] Request-level TTLCache on hot fetchers (`_get_nws_obs`, etc.)
 
-### 5. Later
+### 6. Later
 - [ ] Native iOS (Capacitor + TestFlight) if PWA isn't enough
   - [ ] Lock bundle ID / custom URL scheme early (e.g. `com.marineagent.app`) — Supabase Auth redirect URIs register against it; expensive to change once live
-  - [ ] Build `/api/auth/callback` (Section 6) transport-agnostic — verify an OAuth identity token, don't assume a web-redirect flow, so swapping web sign-in for a native Capacitor Apple/Google SDK later needs no backend change
+  - [ ] Build `/api/auth/callback` (Beach Pulse spec) transport-agnostic — verify an OAuth identity token, don't assume a web-redirect flow, so swapping web sign-in for a native Capacitor Apple/Google SDK later needs no backend change
   - [ ] Before submitting: add real native capability beyond the webview (push via APNs, native geolocation for report GPS tagging) — a bare Capacitor wrapper around the PWA risks App Store Guideline 4.2 (Minimum Functionality) rejection regardless of how it was built
   - [ ] Home screen widget (WidgetKit, 3 sizes) — content spec drafted, **visual design still needs a real polish pass before rollout, this is layout/content only**:
     - Small — favorite beach only: name, flag-color dot, verdict word, temp + wave
@@ -67,7 +79,7 @@
 
 ---
 
-### 6. User Reports — "Beach Pulse" (Community Beach Conditions)
+### Beach Pulse — full spec (priority #1 above)
 
 **Goal:** Beachgoers submit one-tap hazard/condition reports from the beach. The killer-feature bet: fuse NOAA/NWS official data with real-time human eyes-on-the-sand into one trustworthy signal — without becoming Mote's broken, high-friction report flow, and without turning into a second data feed the user has to mentally reconcile. Primary audience: parents/families (repeat, safety-motivated, kids in the water) and retirees/casual goers (infrequent, low patience for friction).
 

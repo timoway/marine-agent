@@ -40,10 +40,11 @@ These require a person at a dashboard; they can't be scripted here. Everything a
 5. From **Project Settings → API → JWT Settings**, copy the **JWT Secret** (backend uses it to verify tokens).
 
 ### 1b. Google OAuth (for Sign in with Google)
+Project ref: **`mubvodgysgdlxwpzgawg`** (`https://mubvodgysgdlxwpzgawg.supabase.co`).
 1. In [Google Cloud Console](https://console.cloud.google.com): create a project (or reuse one).
 2. **APIs & Services → OAuth consent screen** → External → fill app name (**users see this name at sign-in — use the intended consumer name, editable later**), support email, developer email. No sensitive scopes needed (default email/profile).
 3. **APIs & Services → Credentials → Create OAuth client ID → Web application**.
-   - Authorized redirect URI: `https://<project-ref>.supabase.co/auth/v1/callback` (from your Supabase project).
+   - Authorized redirect URI: **`https://mubvodgysgdlxwpzgawg.supabase.co/auth/v1/callback`**
    - Copy the **Client ID** and **Client secret**.
 4. In **Supabase → Authentication → Providers → Google**: paste Client ID + secret, enable.
 5. In **Supabase → Authentication → URL Configuration**: set Site URL to `https://marine-agent.vercel.app` and add it to the redirect allow-list (plus `http://localhost:5173` for local dev).
@@ -52,10 +53,10 @@ These require a person at a dashboard; they can't be scripted here. Everything a
 
 | Var | Where it lives | Value / source | Secret? |
 |-----|----------------|----------------|---------|
-| `SUPABASE_URL` | Render (backend) | Project URL | no |
+| `SUPABASE_URL` | Render (backend) | `https://mubvodgysgdlxwpzgawg.supabase.co` | no |
 | `SUPABASE_SERVICE_ROLE_KEY` | Render (backend) | `service_role` key | **yes** |
 | `SUPABASE_JWT_SECRET` | Render (backend) | JWT Secret | **yes** |
-| `VITE_SUPABASE_URL` | Vercel (web) | Project URL | no |
+| `VITE_SUPABASE_URL` | Vercel (web) | `https://mubvodgysgdlxwpzgawg.supabase.co` | no |
 | `VITE_SUPABASE_ANON_KEY` | Vercel (web) | `anon` key | no (anon is public by design) |
 
 Add to Render via dashboard (or `render.yaml` env with `sync: false` for secrets). Add to Vercel via project env settings. For local dev, mirror into `web/.env.local` (VITE_ vars) and the backend's environment.

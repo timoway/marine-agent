@@ -548,14 +548,17 @@ function App() {
               <div className="header-row">
                 <div className="header-main">
                   <div className="beach-meta beach-meta-compact">
+                    <span className="meta-item meta-tide">
+                      <Activity size={14} />
+                      {data.tides?.next_event ?? '--'}
+                      {data.tides?.trend === 'Rising'
+                        ? <TrendingUp size={14} />
+                        : <TrendingDown size={14} />}
+                    </span>
                     <span className="meta-item"><Thermometer size={14} /> {data.weather?.temp_f ?? '--'}°F air</span>
-                    <span className="meta-item"><Droplets size={14} /> {data.tides?.water_temp ?? '--'}°F water</span>
                     <span className="meta-item"><Navigation2 size={14} /> {data.weather?.wind_mph ?? '--'} mph {data.weather?.wind_dir ?? ''}</span>
                     {lastUpdated && <span className="meta-item meta-muted">Updated {lastUpdated} (Florida)</span>}
                   </div>
-                  {data.tides?.water_temp_source && (
-                    <p className="water-temp-source">Water temp: {data.tides.water_temp_source}</p>
-                  )}
                 </div>
                 <div className="header-actions">
                   <button
@@ -740,6 +743,23 @@ function App() {
                   </div>
                 </div>
 
+                <div className="card tides-card">
+                  <div className="card-title"><Droplets size={18} /> Tides & Water</div>
+                  <div className="card-value" style={{ fontSize: '1.4rem' }}>{data.tides?.water_temp ?? '--'}°F</div>
+                  {data.tides?.water_temp_source && (
+                    <div className="card-subvalue">{data.tides.water_temp_source}</div>
+                  )}
+                  <div className="tide-list">
+                    {data.tides?.predictions?.length > 0 ? data.tides.predictions.map((tide: any, i: number) => (
+                      <div key={i} className="tide-item">
+                        <span>{tide.type === 'H' ? 'High' : 'Low'}</span>
+                        <span style={{ fontWeight: 700 }}>{tide.t.split(' ')[1]}</span>
+                      </div>
+                    )) : <div className="card-subvalue">No upcoming tides</div>}
+                  </div>
+                  <div className="source-label">Source: {data.tides?.source ?? '--'}</div>
+                </div>
+
                 {!data.teeth && (
                   <div className="card water-algae-card">
                     <div className="card-title"><Palette size={18} /> Water & Algae</div>
@@ -785,23 +805,6 @@ function App() {
                 <div className="card-title"><Moon size={18} /> Skywatch</div>
                 <div className="card-value" style={{ fontSize: '1.5rem' }}>{data.skywatch?.moon_phase ?? '--'}</div>
                 <div className="card-subvalue" style={{ color: '#3b82f6', fontWeight: 700 }}>{data.skywatch?.illumination ?? '--'} Illum.</div>
-              </div>
-
-              <div className="card">
-                <div className="card-title"><Droplets size={18} /> Tides & Water</div>
-                <div className="card-value" style={{ fontSize: '1.4rem' }}>{data.tides?.water_temp ?? '--'}°F</div>
-                {data.tides?.water_temp_source && (
-                  <div className="card-subvalue">{data.tides.water_temp_source}</div>
-                )}
-                <div className="tide-list">
-                  {data.tides?.predictions?.length > 0 ? data.tides.predictions.map((tide: any, i: number) => (
-                    <div key={i} className="tide-item">
-                      <span>{tide.type === 'H' ? 'High' : 'Low'}</span>
-                      <span style={{ fontWeight: 700 }}>{tide.t.split(' ')[1]}</span>
-                    </div>
-                  )) : <div className="card-subvalue">No upcoming tides</div>}
-                </div>
-                <div className="source-label">Source: {data.tides?.source ?? '--'}</div>
               </div>
 
               <div className="card">

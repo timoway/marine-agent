@@ -962,6 +962,14 @@ body {
   gap: 6px 10px;
 }
 .meta-item { display: flex; align-items: center; gap: 6px; }
+.meta-tide {
+  flex: 1 1 100%;
+  color: #f8fafc;
+  font-weight: 700;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .meta-muted { opacity: 0.75; }
 .divider { color: #334155; }
 
@@ -1146,6 +1154,14 @@ body {
     flex-shrink: 0;
   }
   .divider { display: none; }
+
+  .mobile-header {
+    margin-bottom: 12px;
+  }
+
+  .mobile-header .header-main {
+    overflow: visible;
+  }
 }
 
 .loading-spinner,

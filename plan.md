@@ -26,7 +26,7 @@
 ## Next up (priority order)
 
 ### 1. Beach Pulse — user reports (killer differentiator)
-**Goal:** the actual bet — fuse NOAA/NWS data with real-time community reports into one trustworthy signal, in a way Mote's broken report flow doesn't. Full spec: *Beach Pulse — full spec* section below. Broken into shippable phases, in dependency order:
+**Goal:** the actual bet — fuse NOAA/NWS data with real-time community reports into one trustworthy signal, in a way Mote's broken report flow doesn't. Full spec: *Beach Pulse — full spec* section below. **Developer build guide (accounts → SQL → backend → frontend, with acceptance criteria):** [`docs/handoff-beach-pulse.md`](docs/handoff-beach-pulse.md). Broken into shippable phases, in dependency order:
 
 | Phase | Scope | Effort |
 |-------|-------|--------|
@@ -151,11 +151,11 @@ count        int
 
 #### New API endpoints
 ```
-POST /api/reports                        -- submit report; always 'published' unless spike-detected → 'held_for_review' (see Server-side rules)
+POST /api/reports                        -- submit report; always 'published' unless spike-detected → 'held_for_review' (see Server-side rules). Requires Bearer JWT.
 GET  /api/reports/{beach_id}             -- today's published reports for a beach
-GET  /api/reports/{beach_id}/history     -- aggregates: ?grain=daily|weekly|monthly&lookback=30d
-POST /api/auth/callback                  -- OAuth callback → session + reporter_id (transport-agnostic: verify identity token, don't assume web-redirect — see Native iOS)
+GET  /api/reports/{beach_id}/history     -- aggregates: ?grain=daily|weekly|monthly&lookback=30d (Phase D)
 ```
+Auth is verified per-request via a Supabase JWT `Authorization: Bearer` header on write routes — **no separate `/api/auth/callback` endpoint** (the OAuth callback is handled client-side by Supabase JS). Verifying a bearer token is inherently transport-agnostic — a native iOS client sends the same header. See [`docs/handoff-beach-pulse.md`](docs/handoff-beach-pulse.md) §0 for the full request flow.
 
 #### Server-side rules (Phase A specifics — starting values, tune with real data)
 These are the ambiguous, high-lock-in decisions an implementer needs before writing Phase A. All thresholds are first guesses, centralized as constants so they're tunable without a schema change.

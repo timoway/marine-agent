@@ -10,7 +10,7 @@
 - §1 (Supabase project + Google OAuth + env vars on Render/Vercel) — **done**.
 - §2 (schema migration) — **done**, applied + verified via `supabase db push` (`supabase/migrations/20260701215741_beach_pulse_schema.sql`).
 - §3 (backend) — **done + deployed** (`reports.py` + `marine_server.py`, live on Render). Verified against live Supabase: `GET /api/reports/{beach}` → `[]`, `beach_pulse` injected into `/api/conditions`, unauth/bad-token POST → 401 (real JWKS path), unknown beach → 400, zero regression on existing endpoints. **Not yet exercised** (needs a real Supabase JWT from Phase B sign-in): successful authenticated POST → insert, server-set tier/status, 429 rate limit, high-tier spike hold. The code for these is written; they just can't be triggered without the frontend.
-- §4 (frontend) — **not started.** This is the next step, and it also unblocks the remaining §3 acceptance checks above.
+- §4 (frontend) — **built + verified in dev, deployed to Vercel.** `supabase.ts`, `BeachPulse.tsx` (FAB + 12-category sheet, verdict-adjacent badge, community list), `apiPost`, and App wiring. Verified against live Render: conditions carry `beach_pulse`, FAB + sheet render, badge correctly absent-when-empty and shows neutral/escalated chips with data. **Remaining acceptance — needs a real Google sign-in in a browser (owner to run once):** sign in → tap a category → confirm the row lands in Supabase, the community list shows it, and the badge updates; then the §3 accept-side checks (server-set tier/status, 429 on repeat, spike hold) can be confirmed with real tokens.
 
 ---
 

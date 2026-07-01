@@ -63,6 +63,7 @@ Phases A+B are the MVP — a beach card with a working, visible Beach Pulse badg
 - [ ] `get_beach_key()` fuzzy-match edge cases (e.g. substring “key”)
 - [ ] Hardcoded skywatch events → ephemeris or remove
 - [ ] Request-level TTLCache on hot fetchers (`_get_nws_obs`, etc.)
+- [ ] `websockets` pinned back to 15.0.1 by `supabase` (its `realtime` sub-package). We don't use Supabase Realtime or any WebSockets and the live deploy is healthy, so it's benign — fix only if a WS/MCP issue surfaces. Options if needed: depend on `postgrest` directly instead of the `supabase` meta-package, or pin `websockets` and test the MCP/SSE stack.
 
 ### 6. Later
 - [ ] Native iOS (Capacitor + TestFlight) if PWA isn't enough

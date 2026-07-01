@@ -151,10 +151,40 @@ count        int
 
 #### New API endpoints
 ```
-POST /api/reports                        -- submit report; tier logic decides published/pending/held
+POST /api/reports                        -- submit report; always 'published' unless spike-detected → 'held_for_review' (see Server-side rules)
 GET  /api/reports/{beach_id}             -- today's published reports for a beach
 GET  /api/reports/{beach_id}/history     -- aggregates: ?grain=daily|weekly|monthly&lookback=30d
 POST /api/auth/callback                  -- OAuth callback → session + reporter_id (transport-agnostic: verify identity token, don't assume web-redirect — see Native iOS)
+```
+
+#### Server-side rules (Phase A specifics — starting values, tune with real data)
+These are the ambiguous, high-lock-in decisions an implementer needs before writing Phase A. All thresholds are first guesses, centralized as constants so they're tunable without a schema change.
+
+**Rate limit (per reporter):** 1 report per `(reporter_id, beach_id, report_type)` per hour, server-enforced. Blocks a single account spamming one category.
+
+**Corroboration window (report_type-specific freshness):** a report is "corroborated" once ≥2 distinct `reporter_id`s submit the same `report_type` at the same beach within the type's freshness window — high-persistence hazards get longer windows:
+- Riptide, shark: 2h (time-sensitive, move/leave quickly)
+- Jellyfish, surf, dead fish, red tide: 4h
+- Low-tier (clarity, crowd, dog, parking, debris, algae): 6h
+Corroboration flips a Moderate/High report's `status` to `escalated` (heavier badge styling) and increments each contributing reporter's `corroborated_count`.
+
+**Spike / anomaly hold (abuse signature, not sparse-but-real):** auto-set `status = 'held_for_review'` (hidden from public reads) when ≥5 reports of the same **High**-tier `report_type` at one beach arrive within 15 min *from accounts with 0 prior corroborated reports* (new/low-trust). A Local Guide or an account with prior corroborated history is exempt — that's real signal, not a brigade. Held reports surface in an admin/review queue (moderation UI is a deferred open question).
+
+**RLS policies on `reports`:**
+- SELECT (anon + authed): only rows where `status IN ('published','escalated')` — `held_for_review` never leaks.
+- INSERT: authenticated only; `reporter_id` must equal the caller's own auth id (can't post as someone else). `severity_tier` and `status` are set server-side, never trusted from the client — no self-escalation, no self-publishing a held report.
+- UPDATE / DELETE: denied to all client roles. Status/escalation changes run only via the backend service role.
+
+**`/api/conditions/{beach_id}` gains a `beach_pulse` object** (frontend renders no chip if absent or `counts` empty):
+```json
+"beach_pulse": {
+  "reports_enabled": true,
+  "total_today": 4,
+  "counts": [
+    { "type": "jellyfish", "count": 3, "escalated": true,  "last_report_min_ago": 40 },
+    { "type": "riptide",   "count": 1, "escalated": false, "last_report_min_ago": 12 }
+  ]
+}
 ```
 
 #### UI integration

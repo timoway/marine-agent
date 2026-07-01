@@ -11,14 +11,16 @@ from typing import Optional, List, Dict, Tuple
 from functools import lru_cache
 from cachetools import TTLCache, cached
 from PIL import Image
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
 from starlette.middleware.trustedhost import TrustedHostMiddleware
+from pydantic import BaseModel
 import uvicorn
 from astral.moon import phase
 
 import cache_store
+import reports
 
 print("[STARTUP] marine_server.py loading...")
 
@@ -173,6 +175,12 @@ BEACH_CONFIG = {
     "pensacola": {"name": "Pensacola Beach", "mote_id": "18", "tide_id": "8729840", "county": "Escambia", "lat": 30.3327, "lon": -87.1414, "nws_station": "KPNS", "shark_teeth": False},
     "panama-city": {"name": "Panama City Beach", "mote_id": "73", "tide_id": "8729210", "county": "Bay", "lat": 30.1766, "lon": -85.8055, "nws_station": "KECP", "shark_teeth": False}
 }
+
+# Beach Pulse (community reports) is on for every beach by default (see plan.md
+# cold-start reasoning). To disable a specific beach, set "reports_enabled": False
+# on its entry above — this loop won't override an explicit value.
+for _cfg in BEACH_CONFIG.values():
+    _cfg.setdefault("reports_enabled", True)
 
 # --- HELPERS ---
 def distance_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -1911,8 +1919,55 @@ async def get_beach_conditions_api(beach_id: str, max_age: int = 0):
     cached = GLOBAL_DATA_STORE.get(beach_id)
     if cached and (max_age <= 0 or _cache_age_seconds(cached) <= max_age):
         cached["data_quality"] = _build_data_quality(cached)
-        return cached
-    return await asyncio.to_thread(refresh_one_beach, beach_id)
+        data = cached
+    else:
+        data = await asyncio.to_thread(refresh_one_beach, beach_id)
+    # Beach Pulse: additive, never breaks this response (build_beach_pulse swallows errors).
+    reports_on = BEACH_CONFIG.get(beach_id, {}).get("reports_enabled", False)
+    data["beach_pulse"] = await asyncio.to_thread(reports.build_beach_pulse, beach_id, reports_on)
+    return data
+
+# --- BEACH PULSE (community reports) ROUTES ---
+class ReportIn(BaseModel):
+    beach_id: str
+    report_type: str
+    notes: Optional[str] = None
+    beach_lat: Optional[float] = None
+    beach_lng: Optional[float] = None
+
+async def require_reporter(authorization: Optional[str] = Header(default=None)) -> str:
+    """Verify the Supabase Bearer JWT and return the reporter's user id. 401 on failure.
+    Transport-agnostic: a native client sends the same header (see handoff §0/§3c)."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="missing bearer token")
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        return await asyncio.to_thread(reports.verify_jwt, token)
+    except reports.ReportAuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+
+@app.post("/api/reports")
+async def create_report(body: ReportIn, reporter_id: str = Depends(require_reporter)):
+    if body.beach_id not in BEACH_CONFIG:
+        raise HTTPException(status_code=400, detail=f"Unknown beach_id: {body.beach_id}")
+    if not BEACH_CONFIG[body.beach_id].get("reports_enabled", False):
+        raise HTTPException(status_code=403, detail="reports not enabled for this beach")
+    try:
+        created = await asyncio.to_thread(
+            reports.submit_report,
+            reporter_id, body.beach_id, body.report_type,
+            body.notes, body.beach_lat, body.beach_lng,
+        )
+    except reports.ReportError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc))
+    return {"report": created}
+
+@app.get("/api/reports/{beach_id}")
+async def list_reports(beach_id: str):
+    if beach_id not in BEACH_CONFIG:
+        raise HTTPException(status_code=400, detail=f"Unknown beach_id: {beach_id}")
+    rows = await asyncio.to_thread(reports.get_reports_for_beach, beach_id)
+    return {"beach_id": beach_id, "reports": rows}
 
 @app.get("/api/rank")
 async def rank_beaches_api(

@@ -14,3 +14,5 @@ httpx
 sse-starlette
 astral
 redis
+supabase
+pyjwt[crypto]

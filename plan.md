@@ -85,10 +85,10 @@
 - One-tap OAuth (Face ID / Google one-tap) — no typing, no waiting on an inbox. This is what actually fixes Mote's friction (the wait, not the identity), and Sign in with Apple is groundwork the iOS App Store goal needs anyway (Apple guideline 4.8).
 - A real OAuth identity (vs. disposable email) is the anti-abuse layer: much harder to mass-fake than magic-link emails, which matters most for **High** tier categories that can trigger real panic if spoofed (e.g. a brigaded "shark" report at a packed family beach).
 - Rate limit + spike detection per verified account: a burst of identical severe reports from new accounts in a short window auto-holds for review instead of publishing.
-- **Visibility vs. escalation are separate — a solo report is never fully hidden.** A single report, any severity, any beach, publishes immediately in a neutral "unconfirmed" state. Corroboration only gates *escalation* to a confirmed/alarming badge state, not whether it's visible at all. Full suppression (`held_for_review`) is reserved for spike/anomaly detection — a burst of matching reports from new accounts in a short window — which is the actual abuse signature, not "only one person happened to be there." This is what makes it safe to enable reports everywhere from day 1 (see below): there's no density threshold a beach has to clear before its reports "work."
-  - **Low** — publishes immediately, no escalation concept needed.
-  - **Moderate** — publishes immediately as "unconfirmed"; escalates to confirmed tone on a 2nd corroborating report or a Local Guide report (see below).
-  - **High** — publishes immediately as "unconfirmed, awaiting confirmation" (explicit copy, so it never reads as broken); escalates the same way. Spike detection, not corroboration, is what can hold one for review.
+- **Visibility vs. escalation are separate — a solo report is never fully hidden.** A single report, any severity, any beach, publishes immediately and is shown as a plain count (e.g. "🦈 1 report") — no "unconfirmed" qualifier text, since a count of 1 already says that; the word would just repeat the number. Corroboration only gates *escalation* to a heavier visual weight (color, not extra copy), not whether it's visible at all. Full suppression (`held_for_review`) is reserved for spike/anomaly detection — a burst of matching reports from new accounts in a short window — which is the actual abuse signature, not "only one person happened to be there." This is what makes it safe to enable reports everywhere from day 1 (see below): there's no density threshold a beach has to clear before its reports "work."
+  - **Low** — plain count, neutral styling throughout, no escalation concept needed.
+  - **Moderate** — plain count, neutral styling; escalates to a heavier/warmer tone on a 2nd corroborating report or a Local Guide report (see below) — same text, different visual weight.
+  - **High** — plain count from the first report (so it never reads as broken or ignored); same escalation via styling, not wording. Spike detection, not corroboration, is what can hold one for review.
 - Digest opt-in (not a gate): after saving a home/favorite beach, offer "daily conditions + reports heads-up for [Beach]" via the email already available from OAuth. Solves retiree/infrequent-user re-engagement without needing push notifications or the native app first.
 
 #### Local Guide status (earned, not granted) + cold start
@@ -136,8 +136,8 @@ POST /api/auth/callback                  -- Apple/Google OAuth callback → sess
 ```
 
 #### UI integration
-1. **FAB on beach detail** — "Report conditions" → icon grid, one tap, no form; every report posts immediately, High-tier categories just carry "unconfirmed, awaiting confirmation" copy until escalated
-2. **Beach Pulse badge** — adjacent to (never inside) the main verdict; absent / neutral-unconfirmed / escalated-confirmed states per the trust model above
+1. **FAB on beach detail** — "Report conditions" → icon grid, one tap, no form; every report posts immediately and shows as a plain count, no qualifier copy
+2. **Beach Pulse badge** — adjacent to (never inside) the main verdict; absent / plain-count-neutral / plain-count-escalated (styling only, same text) states per the trust model above
 3. **Community reports section** in beach detail — chronological list of today's published reports, Local Guide reports marked with 🏅; link to historical trend chart
 
 #### Influence on activity status

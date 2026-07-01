@@ -6,6 +6,8 @@
 
 **Why it's built this way:** see `plan.md` → *Beach Pulse — full spec* for product reasoning (trust model, severity tiers, cold-start). This doc is the **how**; `plan.md` is the **why**. Don't re-litigate decisions here — if something seems off, raise it against `plan.md`.
 
+**Status (2026-07-01):** §1 (Supabase project + Google OAuth + env vars on Render/Vercel) and §2 (schema migration) are **done** — applied and verified against the live project via `supabase db push` (see `supabase/migrations/20260701215741_beach_pulse_schema.sql`). §3 (backend) and §4 (frontend) are not started.
+
 ---
 
 ## 0. Architecture decision (read first — it shapes everything)

@@ -30,7 +30,7 @@
 
 | Phase | Scope | Effort |
 |-------|-------|--------|
-| A — Foundation | Supabase project + `reports` table/RLS, Sign in with Apple/Google, `POST /api/reports` with severity-tier publish logic + rate/spike limits | ~2.5 days |
+| A — Foundation | Supabase project + `reports` table/RLS, **Sign in with Google only** (Apple deferred — see below), `POST /api/reports` with severity-tier publish logic + rate/spike limits | ~2.5 days |
 | B — Ship MVP | `GET /api/reports/{beach_id}` + `/api/conditions` integration, Report FAB, Beach Pulse badge (adjacent to verdict), `reports_enabled: true` default across all `BEACH_CONFIG` beaches | ~2 days |
 | C — Trust layer | `reporter_beach_standing` table + Local Guide auto-promotion, community reports list with 🏅 marking | ~0.5 day |
 | D — Historical (defer) | Daily aggregate job, history endpoint, trend sparkline — lowest priority; needs weeks/months of data to be meaningful regardless of when it's built | ~1.5 days |
@@ -68,6 +68,7 @@ Phases A+B are the MVP — a beach card with a working, visible Beach Pulse badg
 - [ ] Native iOS (Capacitor + TestFlight) if PWA isn't enough
   - [ ] Lock bundle ID / custom URL scheme early (e.g. `com.marineagent.app`) — Supabase Auth redirect URIs register against it; expensive to change once live
   - [ ] Build `/api/auth/callback` (Beach Pulse spec) transport-agnostic — verify an OAuth identity token, don't assume a web-redirect flow, so swapping web sign-in for a native Capacitor Apple/Google SDK later needs no backend change
+  - [ ] Add **Sign in with Apple** here (deferred from Beach Pulse Phase A) — required by App Store guideline 4.8 once native; needs the $99/yr Apple Developer account (also required for submission), a Services ID + signed key in Apple's portal, and periodic client-secret regeneration (Apple keys expire; Google's don't). Tolerate Apple private-relay emails in the digest flow.
   - [ ] Before submitting: add real native capability beyond the webview (push via APNs, native geolocation for report GPS tagging) — a bare Capacitor wrapper around the PWA risks App Store Guideline 4.2 (Minimum Functionality) rejection regardless of how it was built
   - [ ] Home screen widget (WidgetKit, 3 sizes) — content spec drafted, **visual design still needs a real polish pass before rollout, this is layout/content only**:
     - Small — favorite beach only: name, flag-color dot, verdict word, temp + wave
@@ -101,8 +102,9 @@ Phases A+B are the MVP — a beach card with a working, visible Beach Pulse badg
 | Shark sighting | 🦈 | **High — panic-capable** |
 | Red tide / toxic water | ☠️ | **High — panic-capable** |
 
-#### Trust model — Sign in with Apple/Google, not email magic-link
-- One-tap OAuth (Face ID / Google one-tap) — no typing, no waiting on an inbox. This is what actually fixes Mote's friction (the wait, not the identity), and Sign in with Apple is groundwork the iOS App Store goal needs anyway (Apple guideline 4.8).
+#### Trust model — OAuth sign-in, not email magic-link
+- **Web MVP ships Google only.** Apple's "must offer Sign in with Apple" rule (guideline 4.8) only triggers on **App Store submission** — Phases A/B ship as the existing PWA, not a native app, so Google alone is compliant and smaller to build. Sign in with Apple is added in the native iOS phase (it needs the $99/yr Apple Developer account regardless, and Supabase Auth exposes it via the same call — a config add, not a rewrite). See *Native iOS* in section 6.
+- One-tap OAuth (Google one-tap) — no typing, no waiting on an inbox. This is what actually fixes Mote's friction (the wait, not the identity).
 - A real OAuth identity (vs. disposable email) is the anti-abuse layer: much harder to mass-fake than magic-link emails, which matters most for **High** tier categories that can trigger real panic if spoofed (e.g. a brigaded "shark" report at a packed family beach).
 - Rate limit + spike detection per verified account: a burst of identical severe reports from new accounts in a short window auto-holds for review instead of publishing.
 - **Visibility vs. escalation are separate — a solo report is never fully hidden.** A single report, any severity, any beach, publishes immediately and is shown as a plain count (e.g. "🦈 1 report") — no "unconfirmed" qualifier text, since a count of 1 already says that; the word would just repeat the number. Corroboration only gates *escalation* to a heavier visual weight (color, not extra copy), not whether it's visible at all. Full suppression (`held_for_review`) is reserved for spike/anomaly detection — a burst of matching reports from new accounts in a short window — which is the actual abuse signature, not "only one person happened to be there." This is what makes it safe to enable reports everywhere from day 1 (see below): there's no density threshold a beach has to clear before its reports "work."
@@ -125,7 +127,7 @@ beach_id       text not null          -- matches BEACH_CONFIG key
 report_type    text not null          -- jellyfish | algae | riptide | surf | dead_fish | shark | debris | clarity | crowd | dog | parking | red_tide
 severity_tier  text not null          -- low | moderate | high (fixed per report_type, not user-selectable)
 notes          text                   -- optional 140-char free text
-reporter_id    text not null          -- hashed OAuth subject id (Apple/Google), never plaintext email
+reporter_id    text not null          -- hashed OAuth subject id (Google for MVP; Apple later), never plaintext email
 status         text default 'published' -- published (always, on submit) | escalated | held_for_review (spike-detected only)
 corroborated_by text[]                -- reporter_ids of corroborating reports, if any
 created_at     timestamptz default now()
@@ -152,7 +154,7 @@ count        int
 POST /api/reports                        -- submit report; tier logic decides published/pending/held
 GET  /api/reports/{beach_id}             -- today's published reports for a beach
 GET  /api/reports/{beach_id}/history     -- aggregates: ?grain=daily|weekly|monthly&lookback=30d
-POST /api/auth/callback                  -- Apple/Google OAuth callback → session + reporter_id
+POST /api/auth/callback                  -- OAuth callback → session + reporter_id (transport-agnostic: verify identity token, don't assume web-redirect — see Native iOS)
 ```
 
 #### UI integration
@@ -185,7 +187,7 @@ Deferred past MVP — the `points`/`is_local_guide` fields above are enough to e
 | Step | Effort | Dependency |
 |------|--------|------------|
 | Supabase project + `reports` table + RLS | 0.5 day | New: Supabase account |
-| Sign in with Apple/Google (Supabase Auth) | 1 day | Supabase; Apple Developer account for App Store anyway |
+| Sign in with Google (Supabase Auth) — Apple deferred to native iOS phase | 1 day | Supabase; free Google Cloud OAuth client |
 | `POST /api/reports` + severity-tier publish logic + rate/spike limits | 1 day | Supabase |
 | `GET /api/reports/{beach_id}` + integrate into `/api/conditions` response | 0.5 day | above |
 | Report FAB + icon-grid bottom sheet UI | 1 day | API ready |
@@ -211,7 +213,7 @@ Deferred past MVP — the `points`/`is_local_guide` fields above are enough to e
 | Frontend planning toggle | `web/src/App.tsx` — `planningHorizon`, `planOutlook`, rank panel |
 | Home beach | `web/src/App.tsx` — `HOME_BEACH_KEY` |
 | Deploy | Vercel (`web/`) + Render (`marine_server.py`, `render.yaml`) |
-| Database (planned) | Supabase — `reports` table, Sign in with Apple/Google auth, daily aggregates |
+| Database (planned) | Supabase — `reports` table, Sign in with Google auth (Apple later), daily aggregates |
 
 **Key API**
 ```

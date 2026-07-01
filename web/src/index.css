@@ -962,6 +962,7 @@ body {
   gap: 6px 10px;
 }
 .meta-item { display: flex; align-items: center; gap: 6px; }
+.meta-water,
 .meta-tide {
   flex: 1 1 100%;
   color: #f8fafc;

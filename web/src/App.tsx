@@ -548,6 +548,9 @@ function App() {
               <div className="header-row">
                 <div className="header-main">
                   <div className="beach-meta beach-meta-compact">
+                    <span className="meta-item meta-water">
+                      <Droplets size={14} /> {data.tides?.water_temp ?? '--'}°F water
+                    </span>
                     <span className="meta-item meta-tide">
                       <Activity size={14} />
                       {data.tides?.next_event ?? '--'}

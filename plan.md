@@ -59,42 +59,59 @@
 
 ---
 
-### 6. User Reports — Community Beach Conditions
+### 6. User Reports — "Beach Pulse" (Community Beach Conditions)
 
-**Goal:** Beachgoers submit quick hazard/condition reports from the beach. Reports enrich the beach card alongside NOAA/NWS data and build a historical dataset for trend analysis (daily → weekly → monthly → year-over-year).
+**Goal:** Beachgoers submit one-tap hazard/condition reports from the beach. The killer-feature bet: fuse NOAA/NWS official data with real-time human eyes-on-the-sand into one trustworthy signal — without becoming Mote's broken, high-friction report flow, and without turning into a second data feed the user has to mentally reconcile. Primary audience: parents/families (repeat, safety-motivated, kids in the water) and retirees/casual goers (infrequent, low patience for friction).
+
+**Core design principle:** the existing go/no-go verdict is never rewritten by reports. Beach Pulse is a separate, adjacent signal — this is the fix for decision-paralysis: one clean verdict, always answerable in 3 seconds, plus an honest "here's what people are seeing" layer next to it.
 
 #### Report categories
-| Category | Icon | Notes |
-|----------|------|-------|
-| Jellyfish / Man-o-war | 🪼 | Most common Gulf hazard |
-| Algae / Seaweed | 🌿 | Visual + smell; complements FWC HAB data |
-| Riptide / Strong current | 🌀 | High urgency; short persistence |
-| Rough surf / Waves | 🌊 | Qualitative from swimmer/paddler POV |
-| Dead fish | 🐟 | Often correlates with red tide events |
-| Sharks / Wildlife | 🦈 | Sighting report; no severity needed |
-| Debris / Trash | 🗑️ | Water quality signal |
-| Water clarity | 👁️ | Clear / murky / brown |
+| Category | Icon | Severity tier |
+|----------|------|----------------|
+| Water clarity | 👁️ | Low — publishes on 1 verified report |
+| Crowd level | 👥 | Low |
+| Dog-friendly confirmation | 🐕 | Low |
+| Parking (full/available) | 🅿️ | Low |
+| Debris / Trash | 🗑️ | Low |
+| Algae / Seaweed | 🌿 | Low — complements FWC HAB data |
+| Dead fish | 🐟 | Moderate — often correlates with red tide |
+| Rough surf / Waves | 🌊 | Moderate |
+| Jellyfish / Man-o-war | 🪼 | Moderate — most common Gulf hazard |
+| Riptide / Strong current | 🌀 | **High — panic-capable** |
+| Shark sighting | 🦈 | **High — panic-capable** |
+| Red tide / toxic water | ☠️ | **High — panic-capable** |
 
-#### Trust model (email, no full account)
-- User submits report → prompted for email → one-time magic link sent → token stored in `localStorage`
-- Subsequent reports skip email prompt (token already stored)
-- Rate limit: **1 report per beach per category per email per hour** (server-enforced)
-- All reports labeled "Community report" in UI — clearly distinct from official data
+#### Trust model — Sign in with Apple/Google, not email magic-link
+- One-tap OAuth (Face ID / Google one-tap) — no typing, no waiting on an inbox. This is what actually fixes Mote's friction (the wait, not the identity), and Sign in with Apple is groundwork the iOS App Store goal needs anyway (Apple guideline 4.8).
+- A real OAuth identity (vs. disposable email) is the anti-abuse layer: much harder to mass-fake than magic-link emails, which matters most for **High** tier categories that can trigger real panic if spoofed (e.g. a brigaded "shark" report at a packed family beach).
+- Rate limit + spike detection per verified account: a burst of identical severe reports from new accounts in a short window auto-holds for review instead of publishing.
+- **Severity-tiered publishing**, not one-size-fits-all:
+  - **Low** — publishes immediately on 1 verified report.
+  - **Moderate** — publishes on 1 report, shown as "unconfirmed" (neutral tone) until a 2nd corroborating report arrives, then escalates.
+  - **High** — requires 2+ corroborating reports OR a Trusted Local Reporter (see cold start below) before ever becoming publicly visible. Never auto-publish a solo high-severity report from an unknown account.
+- Digest opt-in (not a gate): after saving a home/favorite beach, offer "daily conditions + reports heads-up for [Beach]" via the email already available from OAuth. Solves retiree/infrequent-user re-engagement without needing push notifications or the native app first.
+
+#### Cold start — seeded rollout, not all-21-beaches-at-once
+- **Launch reports only on the beaches actually visited**: `manasota-key`, `englewood`, `venice`, then `siesta`, `lido` as available. Add `reports_enabled: bool` per key in `BEACH_CONFIG` — flipping on new beaches later (scaling south) is a config change, not a rebuild.
+- **Trusted Local Reporter tier**: a small allowlist of verified accounts (founder first) whose reports publish solo even at High severity. Without this, the corroboration rule silently suppresses the founder's own seed reports when there's no second reporter yet at a given beach — the abuse-resistance rule and the bootstrapping need directly conflict unless this override exists.
+- **Empty state is the existing UI, unchanged**: the Beach Pulse chip is *absent* (not "0 reports") when nothing exists for a beach — a zero-report beach looks identical to the app today, so the feature can't make a beach feel more broken than before it existed.
+- As density grows, Trusted Local Reporter allowlist shrinks in relative importance and can be phased out per-beach once organic corroboration is reliably happening there.
 
 #### Data model (Supabase / Postgres)
 ```sql
 -- reports table
-id           uuid primary key default gen_random_uuid()
-beach_id     text not null          -- matches BEACH_CONFIG key
-report_type  text not null          -- jellyfish | algae | riptide | surf | dead_fish | shark | debris | clarity
-severity     text                   -- low | moderate | high (optional, user-selectable)
-notes        text                   -- optional 140-char free text
-reporter_email_hash text           -- sha256(email) — never store plaintext
-reporter_token text                -- opaque token sent in magic link, stored locally
-verified_at  timestamptz            -- set when user clicks magic link
-created_at   timestamptz default now()
-beach_lat    float                  -- optional, from GPS if user permits
-beach_lng    float
+id             uuid primary key default gen_random_uuid()
+beach_id       text not null          -- matches BEACH_CONFIG key
+report_type    text not null          -- jellyfish | algae | riptide | surf | dead_fish | shark | debris | clarity | crowd | dog | parking | red_tide
+severity_tier  text not null          -- low | moderate | high (fixed per report_type, not user-selectable)
+notes          text                   -- optional 140-char free text
+reporter_id    text not null          -- hashed OAuth subject id (Apple/Google), never plaintext email
+trust_tier     text default 'standard' -- standard | trusted_local
+status         text default 'published' -- published | pending_corroboration | held_for_review
+corroborated_by text[]                -- reporter_ids of corroborating reports, if any
+created_at     timestamptz default now()
+beach_lat      float                  -- optional, from GPS if user permits
+beach_lng      float
 
 -- daily_report_aggregates (materialized or scheduled view)
 beach_id     text
@@ -106,22 +123,20 @@ count        int
 
 #### New API endpoints
 ```
-POST /api/reports                        -- submit report (returns pending if unverified)
-GET  /api/reports/{beach_id}             -- today’s verified reports for a beach
+POST /api/reports                        -- submit report; tier logic decides published/pending/held
+GET  /api/reports/{beach_id}             -- today's published reports for a beach
 GET  /api/reports/{beach_id}/history     -- aggregates: ?grain=daily|weekly|monthly&lookback=30d
-GET  /api/reports/verify/{token}         -- magic link callback; marks reports verified
+POST /api/auth/callback                  -- Apple/Google OAuth callback → session + reporter_id
 ```
 
-#### UI integration — three surfaces
-1. **FAB on beach detail** — "Report conditions" button → bottom sheet with icon grid (categories) + optional severity slider + notes → email prompt if no token
-2. **Badge on beach card** — e.g. "🪼 4 · 🌀 1 today" inline with flag/alerts
-3. **Community reports section** in beach detail — chronological list of today’s verified reports; link to historical trend chart
+#### UI integration
+1. **FAB on beach detail** — "Report conditions" → icon grid, one tap, no form for Low/Moderate; High-tier categories show a brief "this will need a second report to confirm" note inline
+2. **Beach Pulse badge** — adjacent to (never inside) the main verdict; absent / neutral-unconfirmed / escalated-confirmed states per the trust model above
+3. **Community reports section** in beach detail — chronological list of today's published reports; link to historical trend chart
 
 #### Influence on activity status
-- 3+ jellyfish reports (last 4h) → adds caution to Swimming status
-- Any riptide report (last 2h) → adds caution to Paddling + Swimming
-- 3+ dead fish / algae reports → flags Water card with community signal
-- Clear label: "Based on X community reports — not official data"
+- Beach Pulse **never rewrites** the primary Swimming/Paddling/Beach verdict — it sits beside it.
+- Confirmed Moderate/High reports may add a short qualifier line under the verdict (e.g. "🪼 3 reports, last 40 min") — same verdict, additional context, not a second verdict to weigh.
 
 #### Historical / trend vision
 - Daily report counts per beach per category stored permanently
@@ -141,19 +156,20 @@ This is a natural evolution: "best for paddling" ≈ "calmest" today; community 
 | Step | Effort | Dependency |
 |------|--------|------------|
 | Supabase project + `reports` table + RLS | 0.5 day | New: Supabase account |
-| `POST /api/reports` + email magic link (Supabase Auth or Resend) | 1 day | Supabase |
+| Sign in with Apple/Google (Supabase Auth) | 1 day | Supabase; Apple Developer account for App Store anyway |
+| `POST /api/reports` + severity-tier publish logic + rate/spike limits | 1 day | Supabase |
 | `GET /api/reports/{beach_id}` + integrate into `/api/conditions` response | 0.5 day | above |
-| Report FAB + bottom sheet UI | 1 day | API ready |
-| Badge + community section on beach card | 0.5 day | API ready |
-| Influence activity status logic | 0.5 day | reports in conditions payload |
+| Report FAB + icon-grid bottom sheet UI | 1 day | API ready |
+| Beach Pulse badge (adjacent to verdict, 3 states) | 0.5 day | API ready |
+| `reports_enabled` per-beach config + seed on 5 beaches | 0.25 day | `BEACH_CONFIG` |
 | Daily aggregate job + history endpoint | 0.5 day | reports table |
 | Historical trend chart (sparkline) | 1 day | history endpoint |
-| **Total estimate** | **~5.5 days** | |
+| **Total estimate** | **~6.75 days** | |
 
 #### Open questions / decisions deferred
-- Magic link email provider: Supabase built-in (easiest) vs. Resend (more control over templates)
-- Moderation: flag/hide report button? Auto-hide outliers (1 shark report vs. 10 jellyfish)?
-- Accounts: Supabase Auth is already wired if magic link is used — upgrading to full accounts later is a config change, not a rewrite
+- Trusted Local Reporter allowlist mechanics: manual (env var / admin table) is enough for MVP given the 5-beach seed set
+- Moderation: explicit flag/hide button, or rely entirely on spike-detection auto-hold for now?
+- Digest cadence/channel: daily email to start; SMS is a later add once volume justifies the cost
 
 ---
 
@@ -165,7 +181,7 @@ This is a natural evolution: "best for paddling" ≈ "calmest" today; community 
 | Frontend planning toggle | `web/src/App.tsx` — `planningHorizon`, `planOutlook`, rank panel |
 | Home beach | `web/src/App.tsx` — `HOME_BEACH_KEY` |
 | Deploy | Vercel (`web/`) + Render (`marine_server.py`, `render.yaml`) |
-| Database (planned) | Supabase — `reports` table, magic-link auth, daily aggregates |
+| Database (planned) | Supabase — `reports` table, Sign in with Apple/Google auth, daily aggregates |
 
 **Key API**
 ```

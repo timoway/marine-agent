@@ -57,6 +57,11 @@
   - [ ] Lock bundle ID / custom URL scheme early (e.g. `com.marineagent.app`) — Supabase Auth redirect URIs register against it; expensive to change once live
   - [ ] Build `/api/auth/callback` (Section 6) transport-agnostic — verify an OAuth identity token, don't assume a web-redirect flow, so swapping web sign-in for a native Capacitor Apple/Google SDK later needs no backend change
   - [ ] Before submitting: add real native capability beyond the webview (push via APNs, native geolocation for report GPS tagging) — a bare Capacitor wrapper around the PWA risks App Store Guideline 4.2 (Minimum Functionality) rejection regardless of how it was built
+  - [ ] Home screen widget (WidgetKit, 3 sizes) — content spec drafted, **visual design still needs a real polish pass before rollout, this is layout/content only**:
+    - Small — favorite beach only: name, flag-color dot, verdict word, temp + wave
+    - Medium — favorite beach (left) + best-nearby pick with distance/reason (right); adds dog-friendly/parking icons since those are top-priority info for regular beach-goers
+    - Large — ranked nearby list within radius, favorite beach pinned at top (star marker), Beach Pulse counts shown inline
+    - Same rules as in-app: verdict never rewritten by report counts; report escalation is styling-only, no "unconfirmed" text
 - [ ] Push notifications for red flag / NWS warnings
 - [ ] iMessage — not feasible without Apple Business Chat
 

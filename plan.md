@@ -16,7 +16,7 @@
 - [x] `outlook_tomorrow` + Open-Meteo daytime surf estimate for tomorrow rank
 - [x] Saved home beach (`localStorage` key: `marineagent-home-beach`)
 - [x] NWS storm badges, hourly “chance of rain”, readable hour labels
-- [x] Radar proximity (Phase C) — cyan pulse; separate from official flag
+- [x] Radar proximity (shipped as old "Phase C" — unrelated to Beach Pulse Phase C) — cyan pulse; separate from official flag
 - [x] MCP tools: `get_beach_conditions`, `rank_beaches` (incl. `when=tomorrow`)
 - [x] Tide fixes (Sarasota/Manatee stations), cold-start / rank tiers
 - [x] Surf period plain-language note; surf paired with shark/water above forecast
@@ -190,7 +190,7 @@ Corroboration flips a Moderate/High report's `status` to `escalated` (heavier ba
 #### UI integration
 1. **FAB on beach detail** — "Report conditions" → icon grid, one tap, no form; every report posts immediately and shows as a plain count, no qualifier copy
 2. **Beach Pulse badge** — adjacent to (never inside) the main verdict; absent / plain-count-neutral / plain-count-escalated (styling only, same text) states per the trust model above
-3. **Community reports section** in beach detail — chronological list of today's published reports, Local Guide reports marked with 🏅; link to historical trend chart
+3. **Community reports section** in beach detail — chronological list of today's published reports, Local Guide reports marked with 🏅; link to historical trend chart *(chart is Phase D — hide the link until then)*
 
 #### Influence on activity status
 - Beach Pulse **never rewrites** the primary Swimming/Paddling/Beach verdict — it sits beside it.
@@ -226,7 +226,7 @@ Deferred past MVP — the `points`/`is_local_guide` fields above are enough to e
 | `reporter_beach_standing` table + Local Guide auto-promotion job | 0.5 day | reports table |
 | Daily aggregate job + history endpoint | 0.5 day | reports table |
 | Historical trend chart (sparkline) | 1 day | history endpoint |
-| **Total estimate** | **~7 days** | |
+| **Total estimate** | **~6.5 days** (matches phase table: A 2.5 + B 2 + C 0.5 + D 1.5) | |
 
 #### Open questions / decisions deferred
 - Local Guide promotion threshold: 3 corroborated reports at a beach is a starting guess, tune once real data exists

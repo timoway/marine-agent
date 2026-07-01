@@ -32,6 +32,7 @@ These require a person at a dashboard; they can't be scripted here. Everything a
 1. Sign up at [supabase.com](https://supabase.com) (GitHub login is fine).
 2. **New project** → region **`us-east-1`** (closest to Florida users + Render), set a strong DB password and save it.
 3. Free tier is sufficient. ⚠️ Free projects **auto-pause after 7 days of zero API traffic** — normal beach-page traffic keeps it warm; just know this for quiet stretches.
+4. On the project-creation **Security** options: keep **Enable Data API** and **Enable automatic RLS** checked; **uncheck "Automatically expose new tables."** Nothing in this design queries Supabase's REST API directly from the frontend — the backend uses the `service_role` key (unaffected by this setting either way) for every read/write — so there's no reason to grant `anon`/`authenticated` roles access to these tables at all.
 4. From **Project Settings → API**, copy three values for the env table below:
    - Project URL
    - `anon` public key
@@ -93,6 +94,9 @@ create table public.reporter_beach_standing (
   points             int not null default 0,
   primary key (reporter_id, beach_id)
 );
+alter table public.reporter_beach_standing enable row level security;
+-- no policies defined → no anon/authenticated access at all (deny by default);
+-- only the backend's service_role (which bypasses RLS) reads/writes this table
 
 -- RLS (defense-in-depth; backend uses service_role and bypasses this)
 alter table public.reports enable row level security;

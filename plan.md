@@ -53,7 +53,10 @@
 - [ ] Request-level TTLCache on hot fetchers (`_get_nws_obs`, etc.)
 
 ### 5. Later
-- [ ] Native iOS (Capacitor + TestFlight) if PWA isn’t enough
+- [ ] Native iOS (Capacitor + TestFlight) if PWA isn't enough
+  - [ ] Lock bundle ID / custom URL scheme early (e.g. `com.marineagent.app`) — Supabase Auth redirect URIs register against it; expensive to change once live
+  - [ ] Build `/api/auth/callback` (Section 6) transport-agnostic — verify an OAuth identity token, don't assume a web-redirect flow, so swapping web sign-in for a native Capacitor Apple/Google SDK later needs no backend change
+  - [ ] Before submitting: add real native capability beyond the webview (push via APNs, native geolocation for report GPS tagging) — a bare Capacitor wrapper around the PWA risks App Store Guideline 4.2 (Minimum Functionality) rejection regardless of how it was built
 - [ ] Push notifications for red flag / NWS warnings
 - [ ] iMessage — not feasible without Apple Business Chat
 

@@ -224,6 +224,25 @@ GET /api/beaches_with_flags
 
 ---
 
+## Infra & cost posture (as of 2026-07-01)
+
+Everything runs on free tiers today; nothing needs upgrading to build and ship the Beach Pulse web MVP.
+
+| Service | Role | Plan | Notes |
+|---------|------|------|-------|
+| Vercel | Frontend (`web/`) | Hobby (free) | Scales with usage; fine at this stage |
+| Render | Compute — FastAPI + MCP (`marine_server.py`) | Hobby workspace, $0/mo + compute | **Stays** — Supabase does not replace it (Render hosts all the Python: fetchers, rank, MCP). See discrepancy below. |
+| Render Redis | Ephemeral request cache | Free | TTL cache only — not durable storage; unrelated to Beach Pulse's DB need |
+| Supabase | Postgres + Auth for Beach Pulse | Free | **Additive, one feature.** Free tier covers early usage. Gotcha: free projects auto-pause after 7 days with zero API requests — any `/api/conditions` traffic keeps it warm |
+| Google OAuth | Sign-in for reports | Free | No Google Cloud cost for a standard OAuth client |
+| Apple Developer | Sign in with Apple + App Store | **$99/yr** | Only needed at the native iOS / App Store phase — not for the web MVP |
+
+**What Supabase actually provides** (project has no persistent DB today, only Redis-as-cache): (1) Postgres for `reports` / `reporter_beach_standing` / aggregates; (2) Auth — the OAuth handshake + a stable user id for `reporter_id`; (3) Row Level Security enforced at the DB layer. Not using Realtime, Edge Functions, or Storage.
+
+> ⚠️ **Verify before relying:** [`render.yaml`](render.yaml) declares `plan: starter` (a paid ~$7/mo instance type) for the web service, but billing is $0 on the Hobby workspace — meaning the **live service is almost certainly on a free instance and the blueprint is stale/never-synced**. Free Render instances spin down after ~15 min idle (hence the existing cold-start handling). Confirm the actual live instance type in the Render dashboard before assuming either; reconcile `render.yaml` to match once known.
+
+---
+
 ## Original chat roadmap (still valid)
 
 ### Phase 1: MCP conversational access ✅

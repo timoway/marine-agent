@@ -36,6 +36,48 @@ export async function waitForApiReady(maxWaitMs = 90000): Promise<ApiHealth> {
   throw new Error(lastError);
 }
 
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+// Authenticated POST for Beach Pulse report submission. Single attempt (no
+// silent retries — a submit is a mutation) and surfaces the HTTP status so
+// callers can react to 429 (rate limit), 401 (re-auth), etc.
+export async function apiPost<T>(
+  path: string,
+  body: unknown,
+  accessToken: string,
+): Promise<T> {
+  const url = `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError(0, 'Cannot reach the Marine Agent API. Try again shortly.');
+  }
+  const text = await res.text();
+  if (!res.ok) {
+    let detail = text.slice(0, 160) || res.statusText;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed?.detail) detail = String(parsed.detail);
+    } catch { /* keep raw text */ }
+    throw new ApiError(res.status, detail);
+  }
+  return JSON.parse(text) as T;
+}
+
 export async function apiFetch<T>(
   path: string,
   options?: { retries?: number },

@@ -1219,3 +1219,161 @@ body {
 @media (display-mode: standalone) {
   .install-prompt { display: none; }
 }
+
+/* --- Beach Pulse (community reports) --- */
+.pulse-badge {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background-color: rgba(30, 41, 59, 0.6);
+  border: 1px solid #334155;
+  border-radius: 16px;
+}
+.pulse-badge-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+.pulse-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.pulse-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  background-color: rgba(148, 163, 184, 0.12);
+  border: 1px solid #334155;
+  color: #cbd5e1;
+}
+.pulse-chip.escalated {
+  background-color: rgba(250, 204, 21, 0.15);
+  border-color: rgba(250, 204, 21, 0.45);
+  color: #fde68a;
+}
+.pulse-chip-icon { font-size: 0.95rem; line-height: 1; }
+.pulse-badge-note { font-size: 0.7rem; color: #64748b; }
+
+.pulse-fab {
+  position: fixed;
+  right: 20px;
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px) + 12px);
+  z-index: 2400;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border: none;
+  border-radius: 999px;
+  background-color: #3b82f6;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+.pulse-fab:hover { background-color: #2563eb; }
+.pulse-fab:active { transform: scale(0.97); }
+.pulse-fab-text { line-height: 1; }
+@media (min-width: 768px) {
+  .pulse-fab { bottom: 28px; right: 28px; }
+}
+
+.pulse-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3500;
+  background-color: rgba(2, 6, 23, 0.6);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.pulse-sheet {
+  width: 100%;
+  max-width: 480px;
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-bottom: none;
+  border-radius: 20px 20px 0 0;
+  padding: 20px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 768px) {
+  .pulse-sheet-overlay { align-items: center; }
+  .pulse-sheet { border-radius: 20px; border-bottom: 1px solid #334155; }
+}
+.pulse-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #f8fafc;
+  margin-bottom: 6px;
+}
+.pulse-sheet-close {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+}
+.pulse-sheet-note { font-size: 0.8rem; color: #94a3b8; margin: 0 0 14px; }
+.pulse-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 8px;
+}
+@media (min-width: 420px) { .pulse-grid { grid-template-columns: repeat(4, 1fr); } }
+.pulse-cat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 6px;
+  background-color: rgba(148, 163, 184, 0.08);
+  border: 1px solid #334155;
+  border-radius: 14px;
+  cursor: pointer;
+  color: #e2e8f0;
+}
+.pulse-cat:hover { background-color: rgba(59, 130, 246, 0.12); border-color: #3b82f6; }
+.pulse-cat:disabled { opacity: 0.5; cursor: default; }
+.pulse-cat-icon { font-size: 1.5rem; line-height: 1; }
+.pulse-cat-label { font-size: 0.72rem; font-weight: 600; text-align: center; }
+.pulse-sheet-message {
+  margin: 14px 0 0;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  text-align: center;
+}
+
+.community-reports-card { grid-column: 1 / -1; }
+.community-list { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.community-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: #e2e8f0;
+}
+.community-item-icon { font-size: 1.1rem; line-height: 1; }
+.community-item-label { font-weight: 600; }
+.community-item-notes { color: #94a3b8; font-size: 0.85rem; }
+.community-item-tag {
+  margin-left: auto;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #fde68a;
+  background-color: rgba(250, 204, 21, 0.15);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.community-disclaimer { margin: 14px 0 0; font-size: 0.7rem; color: #64748b; }

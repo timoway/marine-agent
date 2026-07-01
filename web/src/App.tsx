@@ -10,7 +10,8 @@ import ErrorBoundary from './ErrorBoundary';
 import { apiFetch, waitForApiReady } from './api';
 import { useMediaQuery } from './useMediaQuery';
 import { formatFloridaTime } from './format';
-import type { Beach } from './types';
+import type { Beach, BeachPulse } from './types';
+import { BeachPulseBadge, ReportFab, CommunityReports, useSession } from './BeachPulse';
 
 const BeachMap = lazy(() => import('./BeachMap'));
 
@@ -117,6 +118,7 @@ interface MarineData {
   teeth: { score: number; label: string; tip: string; } | null;
   clarity: { label: string; feet: number; };
   data_quality?: DataQuality;
+  beach_pulse?: BeachPulse;
 }
 
 function redTideColor(status: string | undefined): string {
@@ -180,6 +182,8 @@ function App() {
   const [rankError, setRankError] = useState<string | null>(null);
   const [wakingUp, setWakingUp] = useState(false);
   const [wakeMessage, setWakeMessage] = useState('Waking up coastal sensors…');
+  const session = useSession();
+  const [pulseRefresh, setPulseRefresh] = useState(0);
 
   const closeSidebar = () => setSidebarOpen(false);
   const openSidebar = () => setSidebarOpen(true);
@@ -261,6 +265,18 @@ function App() {
       clearInterval(interval);
     };
   }, [selectedBeach, isMobile, showRadar, refreshMs, maxAgeParam]);
+
+  // After a report is submitted, silently refresh the badge. beach_pulse is
+  // recomputed server-side on every /conditions call, so a cached fetch (fast)
+  // still returns an up-to-date pulse.
+  useEffect(() => {
+    if (pulseRefresh === 0) return;
+    let cancelled = false;
+    apiFetch<MarineData>(`/conditions/${selectedBeach}?max_age=600`, { retries: 1 })
+      .then(json => { if (!cancelled && !('error' in json && json.error)) setData(json); })
+      .catch(() => { /* badge refresh is best-effort */ });
+    return () => { cancelled = true; };
+  }, [pulseRefresh, selectedBeach]);
 
   useEffect(() => {
     let cancelled = false;
@@ -713,6 +729,8 @@ function App() {
                 )}
               </div>
 
+              <BeachPulseBadge pulse={data.beach_pulse} />
+
               <div className="card-pair">
                 {data.teeth && (
                   <div className="card teeth-card">
@@ -830,7 +848,19 @@ function App() {
                   </div>
                 )}
               </div>
+
+              {data.beach_pulse?.reports_enabled && (
+                <CommunityReports beachId={selectedBeach} refreshKey={pulseRefresh} />
+              )}
             </div>
+
+            {data.beach_pulse?.reports_enabled && (
+              <ReportFab
+                beachId={selectedBeach}
+                session={session}
+                onSubmitted={() => setPulseRefresh(k => k + 1)}
+              />
+            )}
           </>
         ) : null}
       </div>

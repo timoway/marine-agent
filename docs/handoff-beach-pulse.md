@@ -6,7 +6,11 @@
 
 **Why it's built this way:** see `plan.md` → *Beach Pulse — full spec* for product reasoning (trust model, severity tiers, cold-start). This doc is the **how**; `plan.md` is the **why**. Don't re-litigate decisions here — if something seems off, raise it against `plan.md`.
 
-**Status (2026-07-01):** §1 (Supabase project + Google OAuth + env vars on Render/Vercel) and §2 (schema migration) are **done** — applied and verified against the live project via `supabase db push` (see `supabase/migrations/20260701215741_beach_pulse_schema.sql`). §3 (backend) and §4 (frontend) are not started.
+**Status (2026-07-01):**
+- §1 (Supabase project + Google OAuth + env vars on Render/Vercel) — **done**.
+- §2 (schema migration) — **done**, applied + verified via `supabase db push` (`supabase/migrations/20260701215741_beach_pulse_schema.sql`).
+- §3 (backend) — **done + deployed** (`reports.py` + `marine_server.py`, live on Render). Verified against live Supabase: `GET /api/reports/{beach}` → `[]`, `beach_pulse` injected into `/api/conditions`, unauth/bad-token POST → 401 (real JWKS path), unknown beach → 400, zero regression on existing endpoints. **Not yet exercised** (needs a real Supabase JWT from Phase B sign-in): successful authenticated POST → insert, server-set tier/status, 429 rate limit, high-tier spike hold. The code for these is written; they just can't be triggered without the frontend.
+- §4 (frontend) — **not started.** This is the next step, and it also unblocks the remaining §3 acceptance checks above.
 
 ---
 

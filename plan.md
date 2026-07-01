@@ -85,17 +85,17 @@
 - One-tap OAuth (Face ID / Google one-tap) — no typing, no waiting on an inbox. This is what actually fixes Mote's friction (the wait, not the identity), and Sign in with Apple is groundwork the iOS App Store goal needs anyway (Apple guideline 4.8).
 - A real OAuth identity (vs. disposable email) is the anti-abuse layer: much harder to mass-fake than magic-link emails, which matters most for **High** tier categories that can trigger real panic if spoofed (e.g. a brigaded "shark" report at a packed family beach).
 - Rate limit + spike detection per verified account: a burst of identical severe reports from new accounts in a short window auto-holds for review instead of publishing.
-- **Severity-tiered publishing**, not one-size-fits-all:
-  - **Low** — publishes immediately on 1 verified report.
-  - **Moderate** — publishes on 1 report, shown as "unconfirmed" (neutral tone) until a 2nd corroborating report arrives, then escalates.
-  - **High** — requires 2+ corroborating reports OR a Trusted Local Reporter (see cold start below) before ever becoming publicly visible. Never auto-publish a solo high-severity report from an unknown account.
+- **Visibility vs. escalation are separate — a solo report is never fully hidden.** A single report, any severity, any beach, publishes immediately in a neutral "unconfirmed" state. Corroboration only gates *escalation* to a confirmed/alarming badge state, not whether it's visible at all. Full suppression (`held_for_review`) is reserved for spike/anomaly detection — a burst of matching reports from new accounts in a short window — which is the actual abuse signature, not "only one person happened to be there." This is what makes it safe to enable reports everywhere from day 1 (see below): there's no density threshold a beach has to clear before its reports "work."
+  - **Low** — publishes immediately, no escalation concept needed.
+  - **Moderate** — publishes immediately as "unconfirmed"; escalates to confirmed tone on a 2nd corroborating report or a Local Guide report (see below).
+  - **High** — publishes immediately as "unconfirmed, awaiting confirmation" (explicit copy, so it never reads as broken); escalates the same way. Spike detection, not corroboration, is what can hold one for review.
 - Digest opt-in (not a gate): after saving a home/favorite beach, offer "daily conditions + reports heads-up for [Beach]" via the email already available from OAuth. Solves retiree/infrequent-user re-engagement without needing push notifications or the native app first.
 
-#### Cold start — seeded rollout, not all-21-beaches-at-once
-- **Launch reports only on the beaches actually visited**: `manasota-key`, `englewood`, `venice`, then `siesta`, `lido` as available. Add `reports_enabled: bool` per key in `BEACH_CONFIG` — flipping on new beaches later (scaling south) is a config change, not a rebuild.
-- **Trusted Local Reporter tier**: a small allowlist of verified accounts (founder first) whose reports publish solo even at High severity. Without this, the corroboration rule silently suppresses the founder's own seed reports when there's no second reporter yet at a given beach — the abuse-resistance rule and the bootstrapping need directly conflict unless this override exists.
-- **Empty state is the existing UI, unchanged**: the Beach Pulse chip is *absent* (not "0 reports") when nothing exists for a beach — a zero-report beach looks identical to the app today, so the feature can't make a beach feel more broken than before it existed.
-- As density grows, Trusted Local Reporter allowlist shrinks in relative importance and can be phased out per-beach once organic corroboration is reliably happening there.
+#### Local Guide status (earned, not granted) + cold start
+- **Enable `reports_enabled: true` for all beaches in `BEACH_CONFIG` from day 1** — no engineering reason to restrict it once visibility no longer depends on local density (see above). The founder's actual visits (`manasota-key`, `englewood`, `venice`, occasionally `siesta`/`lido`) will organically be where the first Local Guides and richest data show up; other beaches just stay quiet (absent Beach Pulse chip) until someone reports there — same as the app looks today, not a worse look.
+- **Local Guide status is earned, not a manual allowlist**: a reporter auto-promotes to Local Guide *for a given beach* after N (e.g. 3) of their reports there get corroborated within a recent window. A Local Guide's report counts as pre-corroborated — it escalates immediately, same effect the old "Trusted Local Reporter" override was reaching for, but data-driven and self-serve instead of an admin table the founder has to maintain.
+- Local Guide is shown as a small badge (🏅) next to that user's own reports — a visible-quality signal for other users, and the seed of a points system without yet building a scored leaderboard.
+- **Empty state is the existing UI, unchanged**: the Beach Pulse chip is *absent* (not "0 reports") when nothing exists for a beach.
 
 #### Data model (Supabase / Postgres)
 ```sql
@@ -106,12 +106,18 @@ report_type    text not null          -- jellyfish | algae | riptide | surf | de
 severity_tier  text not null          -- low | moderate | high (fixed per report_type, not user-selectable)
 notes          text                   -- optional 140-char free text
 reporter_id    text not null          -- hashed OAuth subject id (Apple/Google), never plaintext email
-trust_tier     text default 'standard' -- standard | trusted_local
-status         text default 'published' -- published | pending_corroboration | held_for_review
+status         text default 'published' -- published (always, on submit) | escalated | held_for_review (spike-detected only)
 corroborated_by text[]                -- reporter_ids of corroborating reports, if any
 created_at     timestamptz default now()
 beach_lat      float                  -- optional, from GPS if user permits
 beach_lng      float
+
+-- reporter_beach_standing (derives Local Guide status)
+reporter_id       text
+beach_id          text
+corroborated_count int default 0     -- increments when one of this reporter's reports gets corroborated
+is_local_guide    bool default false  -- auto-set true at corroborated_count >= 3
+points            int default 0       -- quality-weighted: corroborated reports only, not raw submit count
 
 -- daily_report_aggregates (materialized or scheduled view)
 beach_id     text
@@ -130,9 +136,9 @@ POST /api/auth/callback                  -- Apple/Google OAuth callback → sess
 ```
 
 #### UI integration
-1. **FAB on beach detail** — "Report conditions" → icon grid, one tap, no form for Low/Moderate; High-tier categories show a brief "this will need a second report to confirm" note inline
+1. **FAB on beach detail** — "Report conditions" → icon grid, one tap, no form; every report posts immediately, High-tier categories just carry "unconfirmed, awaiting confirmation" copy until escalated
 2. **Beach Pulse badge** — adjacent to (never inside) the main verdict; absent / neutral-unconfirmed / escalated-confirmed states per the trust model above
-3. **Community reports section** in beach detail — chronological list of today's published reports; link to historical trend chart
+3. **Community reports section** in beach detail — chronological list of today's published reports, Local Guide reports marked with 🏅; link to historical trend chart
 
 #### Influence on activity status
 - Beach Pulse **never rewrites** the primary Swimming/Paddling/Beach verdict — it sits beside it.
@@ -152,6 +158,9 @@ Activity filter (paddling / swimming / beach) works today but is derived entirel
 - **Cleanest water** — low HAB + no dead fish/debris reports + clear water reports
 This is a natural evolution: "best for paddling" ≈ "calmest" today; community data makes it richer.
 
+#### Future: Local Guide points & leaderboard
+Deferred past MVP — the `points`/`is_local_guide` fields above are enough to earn and display Local Guide status now. A full scored leaderboard is a real added surface (anti-gaming for points themselves, ranking UI, badge tiers) and premature with a small report base — a leaderboard of 3 names in week one undercuts the "not bloated" goal. Revisit once report volume across the 21 beaches justifies it.
+
 #### Build steps
 | Step | Effort | Dependency |
 |------|--------|------------|
@@ -161,13 +170,14 @@ This is a natural evolution: "best for paddling" ≈ "calmest" today; community 
 | `GET /api/reports/{beach_id}` + integrate into `/api/conditions` response | 0.5 day | above |
 | Report FAB + icon-grid bottom sheet UI | 1 day | API ready |
 | Beach Pulse badge (adjacent to verdict, 3 states) | 0.5 day | API ready |
-| `reports_enabled` per-beach config + seed on 5 beaches | 0.25 day | `BEACH_CONFIG` |
+| `reports_enabled: true` default across all `BEACH_CONFIG` entries | trivial | `BEACH_CONFIG` |
+| `reporter_beach_standing` table + Local Guide auto-promotion job | 0.5 day | reports table |
 | Daily aggregate job + history endpoint | 0.5 day | reports table |
 | Historical trend chart (sparkline) | 1 day | history endpoint |
-| **Total estimate** | **~6.75 days** | |
+| **Total estimate** | **~7 days** | |
 
 #### Open questions / decisions deferred
-- Trusted Local Reporter allowlist mechanics: manual (env var / admin table) is enough for MVP given the 5-beach seed set
+- Local Guide promotion threshold: 3 corroborated reports at a beach is a starting guess, tune once real data exists
 - Moderation: explicit flag/hide button, or rely entirely on spike-detection auto-hold for now?
 - Digest cadence/channel: daily email to start; SMS is a later add once volume justifies the cost
 

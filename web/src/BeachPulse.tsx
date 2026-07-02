@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Megaphone, X } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
-import { apiFetch, apiPost, ApiError } from './api';
+import { apiFetch, apiPost, apiDelete, ApiError } from './api';
 import type { BeachPulse, CommunityReport, ReportType } from './types';
+
+const UNDO_WINDOW_MS = 8000; // toast window; backend allows undo up to 2 min regardless
 
 // Category metadata — keys match the backend SEVERITY_TIER report_type keys.
 // 'wildlife' takes an optional note (e.g. "manatee", "alligator") — see NOTE_TYPES.
@@ -100,23 +102,29 @@ export function ReportFab({
   const [message, setMessage] = useState<string | null>(null);
   const [noteFor, setNoteFor] = useState<ReportType | null>(null);
   const [noteText, setNoteText] = useState('');
+  const [lastSubmitted, setLastSubmitted] = useState<{ id: string; token: string } | null>(null);
+  const [undoing, setUndoing] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const doSubmit = useCallback(
     async (beach: string, type: ReportType, token: string, notes?: string) => {
       setBusy(type);
       setMessage(null);
+      setLastSubmitted(null);
       try {
         const body: Record<string, unknown> = { beach_id: beach, report_type: type };
         if (notes && notes.trim()) body.notes = notes.trim().slice(0, 140);
-        await apiPost('/reports', body, token);
+        const res = await apiPost<{ report: { id: string } }>('/reports', body, token);
         setMessage(`Thanks — ${CATEGORY_BY_TYPE[type]?.label ?? type} report submitted.`);
         setNoteFor(null);
         setNoteText('');
         onSubmitted();
-        setTimeout(() => {
+        if (res?.report?.id) setLastSubmitted({ id: res.report.id, token });
+        closeTimerRef.current = setTimeout(() => {
           setOpen(false);
           setMessage(null);
-        }, 1400);
+          setLastSubmitted(null);
+        }, UNDO_WINDOW_MS);
       } catch (err) {
         if (err instanceof ApiError && err.status === 429) {
           setMessage('You already reported this recently.');
@@ -184,6 +192,26 @@ export function ReportFab({
   const signOut = useCallback(() => {
     if (supabase) void supabase.auth.signOut();
   }, []);
+
+  const handleUndo = useCallback(async () => {
+    if (!lastSubmitted) return;
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    setUndoing(true);
+    try {
+      await apiDelete(`/reports/${lastSubmitted.id}`, lastSubmitted.token);
+      setMessage('Report removed.');
+      onSubmitted();
+    } catch {
+      setMessage("Couldn't undo — it may be past the 2-minute window.");
+    } finally {
+      setUndoing(false);
+      setLastSubmitted(null);
+      setTimeout(() => {
+        setOpen(false);
+        setMessage(null);
+      }, 1200);
+    }
+  }, [lastSubmitted, onSubmitted]);
 
   return (
     <>
@@ -267,7 +295,19 @@ export function ReportFab({
                 ))}
               </div>
             )}
-            {message && <p className="pulse-sheet-message">{message}</p>}
+            {message && (
+              <p className="pulse-sheet-message">
+                {message}
+                {lastSubmitted && (
+                  <>
+                    {' '}
+                    <button className="pulse-signout" onClick={() => void handleUndo()} disabled={undoing}>
+                      {undoing ? 'Undoing…' : 'Undo'}
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -299,6 +339,7 @@ export function CommunityReports({ beachId, refreshKey }: { beachId: string; ref
             <li key={r.id} className="community-item">
               <span className="community-item-icon">{cat?.icon ?? '•'}</span>
               <span className="community-item-label">{cat?.label ?? r.report_type}</span>
+              {r.is_local_guide && <span title="Local Guide">🏅</span>}
               {r.notes && <span className="community-item-notes">{r.notes}</span>}
               {r.status === 'escalated' && <span className="community-item-tag">confirmed</span>}
             </li>

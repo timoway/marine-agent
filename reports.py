@@ -23,6 +23,7 @@ UTC = datetime.timezone.utc
 RATE_LIMIT_PER_HOUR = 1          # per (reporter_id, beach_id, report_type)
 SPIKE_COUNT = 5                  # high-tier reports of one type at one beach...
 SPIKE_WINDOW_MIN = 15            # ...within this window, all from low-trust accounts → held
+UNDO_WINDOW_MIN = 2              # window to delete your own just-submitted report (Track 4)
 LOCAL_GUIDE_THRESHOLD = 3        # corroborated reports at a beach → Local Guide (Phase C)
 
 SEVERITY_TIER = {
@@ -212,6 +213,37 @@ def submit_report(
         raise ReportError(f"submission failed: {str(exc)[:80]}", status=502)
 
 
+def delete_own_report(reporter_id: str, report_id: str) -> None:
+    """Undo a just-submitted report (Track 4). Only the reporter who created it,
+    and only within UNDO_WINDOW_MIN of creation — kills the fat-finger case
+    without weakening the hourly rate limit or corroboration/escalation model."""
+    client = _get_client()
+    if client is None:
+        raise ReportError("reports not available", status=503)
+    try:
+        res = (
+            client.table("reports")
+            .select("id,reporter_id,created_at")
+            .eq("id", report_id)
+            .limit(1)
+            .execute()
+        )
+        rows = res.data or []
+        if not rows:
+            raise ReportError("report not found", status=404)
+        row = rows[0]
+        if row["reporter_id"] != reporter_id:
+            raise ReportError("not your report", status=403)
+        created = _parse_ts(row["created_at"])
+        if created is None or (_utcnow() - created) > datetime.timedelta(minutes=UNDO_WINDOW_MIN):
+            raise ReportError("undo window has passed", status=409)
+        client.table("reports").delete().eq("id", report_id).execute()
+    except ReportError:
+        raise
+    except Exception as exc:
+        raise ReportError(f"undo failed: {str(exc)[:80]}", status=502)
+
+
 def _maybe_hold_spike(client, beach_id: str, report_type: str) -> None:
     """If a burst of high-tier reports of one type at one beach comes entirely
     from low-trust accounts, hold them for review (abuse signature). Established
@@ -248,21 +280,43 @@ def _maybe_hold_spike(client, beach_id: str, report_type: str) -> None:
 
 # --- Read path ---
 def get_reports_for_beach(beach_id: str) -> List[dict]:
-    """Today's visible (published/escalated) reports for a beach, newest first."""
+    """Today's visible (published/escalated) reports for a beach, newest first.
+
+    Each row gets an `is_local_guide` flag (Phase C's promotion logic isn't
+    built yet, so this is always False today — but the read/render path is
+    live now, so the trust layer lights up automatically once it ships).
+    reporter_id is looked up server-side only and never returned to callers.
+    """
     client = _get_client()
     if client is None:
         return []
     try:
         res = (
             client.table("reports")
-            .select("id,report_type,severity_tier,notes,status,created_at")
+            .select("id,report_type,severity_tier,notes,status,created_at,reporter_id")
             .eq("beach_id", beach_id)
             .in_("status", ["published", "escalated"])
             .gte("created_at", _iso(_fl_day_start()))
             .order("created_at", desc=True)
             .execute()
         )
-        return res.data or []
+        rows = res.data or []
+        reporter_ids = list({r["reporter_id"] for r in rows if r.get("reporter_id")})
+        guides = set()
+        if reporter_ids:
+            standing = (
+                client.table("reporter_beach_standing")
+                .select("reporter_id")
+                .eq("beach_id", beach_id)
+                .eq("is_local_guide", True)
+                .in_("reporter_id", reporter_ids)
+                .execute()
+            )
+            guides = {s["reporter_id"] for s in (standing.data or [])}
+        for r in rows:
+            rid = r.pop("reporter_id", None)
+            r["is_local_guide"] = rid in guides
+        return rows
     except Exception as exc:
         print(f"[REPORTS] get_reports_for_beach failed for {beach_id}: {str(exc)[:100]}")
         return []

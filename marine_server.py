@@ -2063,6 +2063,14 @@ async def create_report(body: ReportIn, reporter_id: str = Depends(require_repor
         raise HTTPException(status_code=exc.status, detail=str(exc))
     return {"report": created}
 
+@app.delete("/api/reports/{report_id}", status_code=204)
+async def undo_report(report_id: str, reporter_id: str = Depends(require_reporter)):
+    try:
+        await asyncio.to_thread(reports.delete_own_report, reporter_id, report_id)
+    except reports.ReportError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc))
+    return Response(status_code=204)
+
 @app.get("/api/reports/{beach_id}")
 async def list_reports(beach_id: str):
     if beach_id not in BEACH_CONFIG:

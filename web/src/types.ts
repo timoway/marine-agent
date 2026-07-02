@@ -49,6 +49,7 @@ export interface CommunityReport {
   notes: string | null;
   status: 'published' | 'escalated';
   created_at: string;
+  is_local_guide: boolean;
 }
 
 // 'My reports' — the signed-in user's own reports across all beaches, any status.

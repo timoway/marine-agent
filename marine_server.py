@@ -1982,6 +1982,32 @@ async def delete_me(reporter_id: str = Depends(require_reporter)):
         raise HTTPException(status_code=exc.status, detail=str(exc))
     return Response(status_code=204)
 
+@app.get("/api/me/favorites")
+async def my_favorites(reporter_id: str = Depends(require_reporter)):
+    favs = await asyncio.to_thread(reports.get_favorites, reporter_id)
+    return {"favorites": favs}
+
+@app.post("/api/me/favorites", status_code=204)
+async def add_my_favorite(body: dict, reporter_id: str = Depends(require_reporter)):
+    beach_id = (body or {}).get("beach_id", "")
+    if beach_id not in BEACH_CONFIG:
+        raise HTTPException(status_code=400, detail=f"Unknown beach_id: {beach_id}")
+    try:
+        await asyncio.to_thread(reports.add_favorite, reporter_id, beach_id)
+    except reports.ReportError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc))
+    return Response(status_code=204)
+
+@app.delete("/api/me/favorites/{beach_id}", status_code=204)
+async def remove_my_favorite(beach_id: str, reporter_id: str = Depends(require_reporter)):
+    if beach_id not in BEACH_CONFIG:
+        raise HTTPException(status_code=400, detail=f"Unknown beach_id: {beach_id}")
+    try:
+        await asyncio.to_thread(reports.remove_favorite, reporter_id, beach_id)
+    except reports.ReportError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc))
+    return Response(status_code=204)
+
 @app.get("/api/rank")
 async def rank_beaches_api(
     activity: str = "paddling",

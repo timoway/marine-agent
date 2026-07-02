@@ -287,6 +287,49 @@ def get_reports_for_user(reporter_id: str) -> List[dict]:
         return []
 
 
+# --- Favorite beaches (profile-level, synced across devices) ---
+def get_favorites(user_id: str) -> List[str]:
+    """The caller's favorite beach ids, oldest first."""
+    client = _get_client()
+    if client is None:
+        return []
+    try:
+        res = (
+            client.table("user_favorites")
+            .select("beach_id")
+            .eq("user_id", user_id)
+            .order("created_at", desc=False)
+            .execute()
+        )
+        return [r["beach_id"] for r in (res.data or [])]
+    except Exception as exc:
+        print(f"[REPORTS] get_favorites failed: {str(exc)[:100]}")
+        return []
+
+
+def add_favorite(user_id: str, beach_id: str) -> None:
+    client = _get_client()
+    if client is None:
+        raise ReportError("favorites not available", status=503)
+    try:
+        client.table("user_favorites").upsert(
+            {"user_id": user_id, "beach_id": beach_id},
+            on_conflict="user_id,beach_id",
+        ).execute()
+    except Exception as exc:
+        raise ReportError(f"could not save favorite: {str(exc)[:80]}", status=502)
+
+
+def remove_favorite(user_id: str, beach_id: str) -> None:
+    client = _get_client()
+    if client is None:
+        raise ReportError("favorites not available", status=503)
+    try:
+        client.table("user_favorites").delete().eq("user_id", user_id).eq("beach_id", beach_id).execute()
+    except Exception as exc:
+        raise ReportError(f"could not remove favorite: {str(exc)[:80]}", status=502)
+
+
 # --- Account deletion (docs/roadmap-ios-launch.md §2b: aggregate-then-delete) ---
 def delete_account(reporter_id: str) -> None:
     """Fold the user's reports into identity-free daily counts, then delete their

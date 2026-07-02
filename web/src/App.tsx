@@ -3,7 +3,7 @@ import {
   Waves, Thermometer, Eye, Droplets, AlertTriangle, 
   Ship, Calendar, Search, Menu, X, LayoutDashboard, Map as MapIcon,
   Activity, Palette, Leaf, Moon, CloudSun, Navigation2,
-  TrendingUp, TrendingDown, Flag, ChevronRight, Footprints, Zap, Home
+  TrendingUp, TrendingDown, Flag, ChevronRight, Footprints, Zap, Home, Heart
 } from 'lucide-react';
 import InstallPrompt from './InstallPrompt';
 import ErrorBoundary from './ErrorBoundary';
@@ -13,6 +13,10 @@ import { formatFloridaTime } from './format';
 import type { Beach, BeachPulse } from './types';
 import { BeachPulseBadge, ReportFab, CommunityReports, useSession } from './BeachPulse';
 import { AccountMenu } from './AccountMenu';
+import { OnboardingSheet } from './Onboarding';
+import { useFavorites } from './favorites';
+import { distanceMiles, type Coords } from './geo';
+import { supabase } from './supabase';
 
 const BeachMap = lazy(() => import('./BeachMap'));
 
@@ -47,6 +51,7 @@ interface RankResponse {
 
 const RANK_RADIUS_MILES = 50;
 const HOME_BEACH_KEY = 'marineagent-home-beach';
+const ONBOARDED_KEY = 'marineagent-onboarded';
 const RANK_ACTIVITY_LABELS: Record<RankActivity, string> = {
   paddling: 'Paddle',
   swimming: 'Swim',
@@ -185,6 +190,43 @@ function App() {
   const [wakeMessage, setWakeMessage] = useState('Waking up coastal sensors…');
   const session = useSession();
   const [pulseRefresh, setPulseRefresh] = useState(0);
+  const { favorites, toggleFavorite } = useFavorites(session);
+  const [userCoords, setUserCoords] = useState<Coords | null>(null);
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
+    try {
+      const onboarded = localStorage.getItem(ONBOARDED_KEY);
+      if (onboarded) return false;
+      if (readStoredHomeBeach()) {
+        // existing user from before onboarding existed — don't nag them
+        localStorage.setItem(ONBOARDED_KEY, '1');
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  const finishOnboarding = (beachId: string | null) => {
+    try { localStorage.setItem(ONBOARDED_KEY, '1'); } catch { /* private mode */ }
+    setShowOnboarding(false);
+    if (beachId) {
+      storeHomeBeach(beachId);
+      setHomeBeach(beachId);
+      setSelectedBeach(beachId);
+    }
+  };
+
+  const onFavoriteClick = (beachId: string) => {
+    if (session) {
+      toggleFavorite(beachId);
+    } else {
+      void supabase?.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin },
+      });
+    }
+  };
 
   const closeSidebar = () => setSidebarOpen(false);
   const openSidebar = () => setSidebarOpen(true);
@@ -313,9 +355,15 @@ function App() {
     return beach?.name ?? rankData?.nearby?.anchor_name ?? 'this area';
   }, [beaches, selectedBeach, rankData?.nearby?.anchor_name]);
 
-  const filteredBeaches = useMemo(() => beaches.filter(beach => 
-    beach.name.toLowerCase().includes(searchQuery.toLowerCase())
-  ), [beaches, searchQuery]);
+  const filteredBeaches = useMemo(() => {
+    const filtered = beaches.filter(beach =>
+      beach.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    if (!userCoords) return filtered.map(b => ({ ...b, dist: null as number | null }));
+    return filtered
+      .map(b => ({ ...b, dist: distanceMiles(userCoords, { lat: b.lat, lon: b.lon }) }))
+      .sort((a, b) => (a.dist ?? 0) - (b.dist ?? 0));
+  }, [beaches, searchQuery, userCoords]);
 
   const lastUpdated = useMemo(() => {
     if (!data?.timestamp) return null;
@@ -340,6 +388,14 @@ function App() {
   return (
     <div className="dashboard-container">
       <InstallPrompt />
+      {showOnboarding && beaches.length > 0 && (
+        <OnboardingSheet
+          beaches={beaches}
+          onPick={beachId => finishOnboarding(beachId)}
+          onSkip={() => finishOnboarding(null)}
+          onCoords={setUserCoords}
+        />
+      )}
       {sidebarOpen && isMobile && (
         <div className="sidebar-overlay" onClick={closeSidebar} aria-hidden="true" />
       )}
@@ -354,7 +410,7 @@ function App() {
             </div>
           </div>
           <div className="sidebar-header-actions">
-            <AccountMenu session={session} beaches={beaches} />
+            <AccountMenu session={session} beaches={beaches} favorites={favorites} onSelectBeach={selectBeach} />
             <button onClick={closeSidebar} className="sidebar-close-btn" aria-label="Close menu">
               <X size={20} />
             </button>
@@ -463,6 +519,8 @@ function App() {
             >
               <div className="beach-item-dot" style={{ backgroundColor: beach.color }} />
               <span className="beach-item-name">{beach.name}</span>
+              {beach.dist != null && <span className="beach-item-dist">{Math.round(beach.dist)} mi</span>}
+              {favorites.includes(beach.id) && <Heart size={13} className="beach-item-fav" aria-label="Favorite" />}
               {homeBeach === beach.id && <Home size={14} className="beach-item-home" aria-label="Home beach" />}
               <ChevronRight size={16} className="beach-item-chevron" />
             </button>
@@ -491,7 +549,7 @@ function App() {
             >
               {viewMode === 'map' ? <LayoutDashboard size={20} /> : <MapIcon size={20} />}
             </button>
-            <AccountMenu session={session} beaches={beaches} />
+            <AccountMenu session={session} beaches={beaches} favorites={favorites} onSelectBeach={selectBeach} />
           </header>
         )}
 
@@ -534,10 +592,19 @@ function App() {
             </Suspense>
           </ErrorBoundary>
         ) : loading ? (
-          <div className="loading-spinner">
-            <div className="spinner">🌊</div>
-            {wakingUp && <p className="wake-message">{wakeMessage}</p>}
-            {wakingUp && <p className="wake-hint">First load after idle can take up to 60 seconds on Render.</p>}
+          <div className="skeleton-page" aria-busy="true" aria-label="Loading beach conditions">
+            <div className="skeleton-block skeleton-meta" />
+            <div className="skeleton-block skeleton-hero">
+              {wakingUp && <p className="wake-message">{wakeMessage}</p>}
+              {wakingUp && <p className="wake-hint">First load after idle can take up to 60 seconds on Render.</p>}
+            </div>
+            <div className="skeleton-chips">
+              <span className="skeleton-block" /><span className="skeleton-block" /><span className="skeleton-block" />
+            </div>
+            <div className="skeleton-pair">
+              <div className="skeleton-block skeleton-card" />
+              <div className="skeleton-block skeleton-card" />
+            </div>
           </div>
         ) : data ? (
           <>
@@ -587,6 +654,15 @@ function App() {
                 <div className="header-actions">
                   <button
                     type="button"
+                    className={`home-beach-btn compact ${favorites.includes(selectedBeach) ? 'favorited' : ''}`}
+                    onClick={() => onFavoriteClick(selectedBeach)}
+                    title={favorites.includes(selectedBeach) ? 'Remove favorite' : 'Add to favorites'}
+                    aria-label={favorites.includes(selectedBeach) ? 'Remove favorite' : 'Add to favorites'}
+                  >
+                    <Heart size={16} fill={favorites.includes(selectedBeach) ? 'currentColor' : 'none'} />
+                  </button>
+                  <button
+                    type="button"
                     className={`home-beach-btn compact ${homeBeach === selectedBeach ? 'active' : ''}`}
                     onClick={() => setAsHomeBeach(selectedBeach)}
                     title="Set as home beach"
@@ -614,6 +690,15 @@ function App() {
                     >
                       <Home size={15} />
                       {homeBeach === selectedBeach ? 'Home beach' : 'Set home'}
+                    </button>
+                    <button
+                      type="button"
+                      className={`home-beach-btn ${favorites.includes(selectedBeach) ? 'favorited' : ''}`}
+                      onClick={() => onFavoriteClick(selectedBeach)}
+                      title={favorites.includes(selectedBeach) ? 'Remove favorite' : 'Add to favorites'}
+                    >
+                      <Heart size={15} fill={favorites.includes(selectedBeach) ? 'currentColor' : 'none'} />
+                      {favorites.includes(selectedBeach) ? 'Favorited' : 'Add favorite'}
                     </button>
                   </div>
                   <div className="beach-meta">

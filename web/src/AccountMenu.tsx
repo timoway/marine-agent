@@ -53,10 +53,14 @@ export function AccountAvatarButton({
 export function AccountSheet({
   session,
   beaches,
+  favorites,
+  onSelectBeach,
   onClose,
 }: {
   session: Session;
   beaches: Beach[];
+  favorites: string[];
+  onSelectBeach: (beachId: string) => void;
   onClose: () => void;
 }) {
   const [myReports, setMyReports] = useState<MyReport[] | null>(null);
@@ -106,6 +110,24 @@ export function AccountSheet({
           {session.user.email}
           {providerLabel(session) && ` · Signed in with ${providerLabel(session)}`}
         </p>
+
+        {favorites.length > 0 && (
+          <div className="account-section">
+            <span className="account-section-title">Favorite beaches</span>
+            <ul className="community-list">
+              {favorites.map(id => (
+                <li key={id}>
+                  <button
+                    className="account-favorite-item"
+                    onClick={() => { onSelectBeach(id); onClose(); }}
+                  >
+                    ♥ {beachName(id)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <div className="account-section">
           <span className="account-section-title">My reports</span>
@@ -167,13 +189,29 @@ export function AccountSheet({
   );
 }
 
-export function AccountMenu({ session, beaches }: { session: Session | null; beaches: Beach[] }) {
+export function AccountMenu({
+  session,
+  beaches,
+  favorites,
+  onSelectBeach,
+}: {
+  session: Session | null;
+  beaches: Beach[];
+  favorites: string[];
+  onSelectBeach: (beachId: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <AccountAvatarButton session={session} onClick={() => setOpen(true)} />
       {open && session && (
-        <AccountSheet session={session} beaches={beaches} onClose={() => setOpen(false)} />
+        <AccountSheet
+          session={session}
+          beaches={beaches}
+          favorites={favorites}
+          onSelectBeach={onSelectBeach}
+          onClose={() => setOpen(false)}
+        />
       )}
     </>
   );

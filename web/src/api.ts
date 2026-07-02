@@ -75,6 +75,7 @@ export async function apiPost<T>(
     } catch { /* keep raw text */ }
     throw new ApiError(res.status, detail);
   }
+  if (!text) return undefined as T; // 204 no-content (e.g. favorites add)
   return JSON.parse(text) as T;
 }
 

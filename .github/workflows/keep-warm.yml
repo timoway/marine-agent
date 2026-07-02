@@ -1,0 +1,20 @@
+name: keep-warm
+
+# Render free-tier instances spin down after ~15 min idle, which turns the
+# "3-second verdict" into a 30-60s cold start (docs/roadmap-ios-launch.md §3).
+# This pings /health every 10 minutes to keep the instance warm. GitHub cron
+# timing has jitter (runs can be delayed several minutes) - acceptable here.
+# Retire this workflow when the service moves to a paid always-on instance
+# at TestFlight.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Render /health
+        run: curl -fsS -m 45 https://marine-agent.onrender.com/health > /dev/null && echo "warm"

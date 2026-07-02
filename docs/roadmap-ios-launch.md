@@ -33,7 +33,11 @@
 
 ## 2. Track 1 — Accounts & identity (App Store blocker)
 
-**Status (2026-07-02): built, deployed, structurally verified.** Migration applied and verified live (grants, FK cascade confirmed via `pg_constraint`; the aggregation SQL itself verified correct against the one real existing report, non-destructively, then cleaned up). Backend (`GET /api/me/reports`, `DELETE /api/me`) live on Render, confirmed rejecting no-auth/bad-token with 401, zero regression on existing endpoints. Frontend (`AccountMenu.tsx`) live on Vercel, both entry points (mobile top bar, desktop sidebar) verified in preview against the live API, `signInWithOAuth` call confirmed generating a correct authorize URL. **Not yet exercised — needs a human, same boundary as Beach Pulse's own launch:** the actual `DELETE /api/me` call end-to-end (aggregation lands correctly + auth user actually deletes + reports cascade). Recommend testing with a **second, throwaway Google account** rather than the primary one, since it's genuinely irreversible.
+**Status (2026-07-02): DONE — verified end-to-end with a real account deletion by the owner.** Confirmed by direct SQL after the owner deleted their real account: `auth.users` 0 rows, `reports` 0 rows (cascade), and `daily_report_aggregates` holds `manasota-key · 2026-07-02 · crowd · 1` — the aggregate-then-delete policy worked exactly as designed (statistical value preserved anonymously; everything identity-tied removed).
+
+**Additions after review with owner (2026-07-02):**
+- **Report editing: rejected (owner-confirmed N).** Category edits would let a report change under its corroborators, making escalation unearned; immutability is a trust property. The fat-finger case is covered by Track 4's 2-minute undo.
+- **Favorite beaches (owner request): shipped.** `user_favorites` table (RLS deny-by-default, service_role grants, cascade on account deletion), `GET/POST /api/me/favorites` + `DELETE /api/me/favorites/{beach_id}`, heart button in both headers (signed-out tap routes to sign-in), hearts in the sidebar, favorites section in the account sheet. Server-side (vs. device-local home beach) deliberately: favorites are the substrate for the digest, push alerts ("your beach went red"), and the widget.
 
 **Goal:** a user can see who they are, see what they've contributed, leave cleanly, and delete themselves — from an obvious place, not a report sheet.
 
@@ -63,6 +67,12 @@
 ---
 
 ## 3. Track 2 — Speed to verdict (the product promise)
+
+**Status (2026-07-02): DONE** (except the paid-Render decision, which is deliberately deferred to TestFlight per owner decision).
+- Keep-warm: `.github/workflows/keep-warm.yml` pings `/health` every 10 min — confirmed registered and `active` on GitHub Actions.
+- Skeleton UI replaces the spinner; wake message preserved inside the hero skeleton. Visually verified.
+- Onboarding sheet: shipped and verified end-to-end in preview (geolocation ask → distance-sorted picker → pick saves home beach + never reappears; existing users with a saved home beach are auto-exempted).
+- "Near me": geolocation coords distance-sort the sidebar with mile labels. Coords are captured via the onboarding flow's location grant.
 
 **Goal:** cold open → verdict readable in under 3 seconds, warm; under 8 seconds, worst case.
 

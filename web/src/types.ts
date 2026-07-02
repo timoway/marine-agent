@@ -40,3 +40,14 @@ export interface CommunityReport {
   status: 'published' | 'escalated';
   created_at: string;
 }
+
+// 'My reports' — the signed-in user's own reports across all beaches, any status.
+export interface MyReport {
+  id: string;
+  beach_id: string;
+  report_type: ReportType;
+  severity_tier: 'low' | 'moderate' | 'high';
+  notes: string | null;
+  status: 'published' | 'escalated' | 'held_for_review';
+  created_at: string;
+}

@@ -25,7 +25,7 @@ export const REPORT_CATEGORIES: { type: ReportType; icon: string; label: string 
 // Types that show an optional free-text note before submitting.
 const NOTE_TYPES = new Set<ReportType>(['wildlife']);
 
-const CATEGORY_BY_TYPE = Object.fromEntries(
+export const CATEGORY_BY_TYPE = Object.fromEntries(
   REPORT_CATEGORIES.map(c => [c.type, c]),
 ) as Record<ReportType, { type: ReportType; icon: string; label: string }>;
 
@@ -41,6 +41,14 @@ export function useSession(): Session | null {
     return () => sub.subscription.unsubscribe();
   }, []);
   return session;
+}
+
+// Provider-agnostic display label — Sign in with Apple lands in the native
+// phase (see plan.md), so this must never hardcode "Google".
+export function providerLabel(session: Session | null): string {
+  const provider = session?.user?.app_metadata?.provider;
+  if (!provider) return '';
+  return provider.charAt(0).toUpperCase() + provider.slice(1);
 }
 
 function timeAgo(minAgo: number | null): string {
@@ -208,7 +216,8 @@ export function ReportFab({
             </div>
             {session ? (
               <p className="pulse-sheet-note">
-                Signed in as {session.user.email ?? 'Google user'} ·{' '}
+                Signed in as {session.user.email ?? 'you'}
+                {providerLabel(session) && ` (${providerLabel(session)})`} ·{' '}
                 <button className="pulse-signout" onClick={signOut}>Sign out</button>
               </p>
             ) : (

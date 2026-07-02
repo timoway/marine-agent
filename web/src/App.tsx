@@ -12,6 +12,7 @@ import { useMediaQuery } from './useMediaQuery';
 import { formatFloridaTime } from './format';
 import type { Beach, BeachPulse } from './types';
 import { BeachPulseBadge, ReportFab, CommunityReports, useSession } from './BeachPulse';
+import { AccountMenu } from './AccountMenu';
 
 const BeachMap = lazy(() => import('./BeachMap'));
 
@@ -352,9 +353,12 @@ function App() {
               <p className="sidebar-subtitle">SWFL Coastal Intel</p>
             </div>
           </div>
-          <button onClick={closeSidebar} className="sidebar-close-btn" aria-label="Close menu">
-            <X size={20} />
-          </button>
+          <div className="sidebar-header-actions">
+            <AccountMenu session={session} beaches={beaches} />
+            <button onClick={closeSidebar} className="sidebar-close-btn" aria-label="Close menu">
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         <div className="view-toggle">
@@ -487,6 +491,7 @@ function App() {
             >
               {viewMode === 'map' ? <LayoutDashboard size={20} /> : <MapIcon size={20} />}
             </button>
+            <AccountMenu session={session} beaches={beaches} />
           </header>
         )}
 

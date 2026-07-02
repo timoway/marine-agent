@@ -78,6 +78,51 @@ export async function apiPost<T>(
   return JSON.parse(text) as T;
 }
 
+// Authenticated GET — for private routes like /me/reports. Single attempt,
+// same status-aware error surface as apiPost.
+export async function apiGetAuthed<T>(path: string, accessToken: string): Promise<T> {
+  const url = `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  } catch {
+    throw new ApiError(0, 'Cannot reach the Marine Agent API. Try again shortly.');
+  }
+  const text = await res.text();
+  if (!res.ok) {
+    let detail = text.slice(0, 160) || res.statusText;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed?.detail) detail = String(parsed.detail);
+    } catch { /* keep raw text */ }
+    throw new ApiError(res.status, detail);
+  }
+  return JSON.parse(text) as T;
+}
+
+// Authenticated DELETE — no response body expected (204).
+export async function apiDelete(path: string, accessToken: string): Promise<void> {
+  const url = `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch {
+    throw new ApiError(0, 'Cannot reach the Marine Agent API. Try again shortly.');
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    let detail = text.slice(0, 160) || res.statusText;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed?.detail) detail = String(parsed.detail);
+    } catch { /* keep raw text */ }
+    throw new ApiError(res.status, detail);
+  }
+}
+
 export async function apiFetch<T>(
   path: string,
   options?: { retries?: number },

@@ -33,6 +33,8 @@
 
 ## 2. Track 1 — Accounts & identity (App Store blocker)
 
+**Status (2026-07-02): built, deployed, structurally verified.** Migration applied and verified live (grants, FK cascade confirmed via `pg_constraint`; the aggregation SQL itself verified correct against the one real existing report, non-destructively, then cleaned up). Backend (`GET /api/me/reports`, `DELETE /api/me`) live on Render, confirmed rejecting no-auth/bad-token with 401, zero regression on existing endpoints. Frontend (`AccountMenu.tsx`) live on Vercel, both entry points (mobile top bar, desktop sidebar) verified in preview against the live API, `signInWithOAuth` call confirmed generating a correct authorize URL. **Not yet exercised — needs a human, same boundary as Beach Pulse's own launch:** the actual `DELETE /api/me` call end-to-end (aggregation lands correctly + auth user actually deletes + reports cascade). Recommend testing with a **second, throwaway Google account** rather than the primary one, since it's genuinely irreversible.
+
 **Goal:** a user can see who they are, see what they've contributed, leave cleanly, and delete themselves — from an obvious place, not a report sheet.
 
 ### 2a. Account menu (frontend)

@@ -149,31 +149,59 @@ NWS_STATIONS = {
     "KSPG": {"name": "Albert Whitted Airport", "lat": 27.76, "lon": -82.62},
     "KDTS": {"name": "Destin Executive Airport", "lat": 30.39, "lon": -86.47},
     "KPNS": {"name": "Pensacola Intl", "lat": 30.47, "lon": -87.18},
-    "KECP": {"name": "NW Florida Beaches Intl", "lat": 30.35, "lon": -85.79}
+    "KECP": {"name": "NW Florida Beaches Intl", "lat": 30.35, "lon": -85.79},
+    "KMIA": {"name": "Miami Intl", "lat": 25.79056, "lon": -80.31639},
+    "KFLL": {"name": "Fort Lauderdale-Hollywood Intl", "lat": 26.07874, "lon": -80.1622},
+    "KPMP": {"name": "Pompano Beach Airpark", "lat": 26.24556, "lon": -80.11139},
+    "KBCT": {"name": "Boca Raton Airport", "lat": 26.37861, "lon": -80.10778},
+    "KPBI": {"name": "Palm Beach Intl", "lat": 26.6851, "lon": -80.09919},
+    "KVRB": {"name": "Vero Beach Municipal", "lat": 27.65556, "lon": -80.41806},
+    "KCOI": {"name": "Merritt Island Airport", "lat": 28.3422, "lon": -80.68407},
+    "KDAB": {"name": "Daytona Beach Intl", "lat": 29.17354, "lon": -81.07186},
+    "KSGJ": {"name": "Northeast Florida Regional (St. Augustine)", "lat": 29.95924, "lon": -81.34105},
+    "KCRG": {"name": "Jacksonville Craig Municipal", "lat": 30.33709, "lon": -81.51275}
 }
 
 BEACH_CONFIG = {
-    "venice": {"name": "Venice Beach", "mote_id": "6", "tide_id": "8725889", "county": "Sarasota", "lat": 27.1001, "lon": -82.4542, "nws_station": "KVNC", "shark_teeth": True},
-    "manasota-key": {"name": "Manasota Key Beach", "mote_id": "3", "tide_id": "8725889", "county": "Sarasota", "lat": 27.0125, "lon": -82.4131, "nws_station": "KVNC", "shark_teeth": True},
-    "siesta": {"name": "Siesta Key Beach", "mote_id": "2", "tide_id": "8726034", "county": "Sarasota", "lat": 27.2662, "lon": -82.5658, "nws_station": "KSRQ", "shark_teeth": False},
-    "lido": {"name": "Lido Key Beach", "mote_id": "4", "tide_id": "8726034", "county": "Sarasota", "lat": 27.3188, "lon": -82.5786, "nws_station": "KSRQ", "shark_teeth": False},
-    "caspersen": {"name": "Caspersen Beach", "mote_id": "40", "tide_id": "8725889", "county": "Sarasota", "lat": 27.0700, "lon": -82.4497, "nws_station": "KVNC", "shark_teeth": True},
-    "nokomis": {"name": "Nokomis Beach", "mote_id": "5", "tide_id": "8725889", "county": "Sarasota", "lat": 27.1264, "lon": -82.4644, "nws_station": "KVNC", "shark_teeth": True},
-    "englewood": {"name": "Englewood Beach", "mote_id": "42", "tide_id": "8725889", "county": "Charlotte", "lat": 26.9242, "lon": -82.3619, "nws_station": "KPGD", "shark_teeth": True},
-    "fort-myers": {"name": "Fort Myers Beach", "mote_id": "11", "tide_id": "8725325", "county": "Lee", "lat": 26.4526, "lon": -81.9484, "nws_station": "KFMY", "shark_teeth": False},
-    "bonita": {"name": "Bonita Beach", "mote_id": "14", "tide_id": "8725110", "county": "Lee", "lat": 26.3308, "lon": -81.8447, "nws_station": "KAPF", "shark_teeth": False},
-    "vanderbilt": {"name": "Vanderbilt Beach", "mote_id": "29", "tide_id": "8725110", "county": "Collier", "lat": 26.2558, "lon": -81.8253, "nws_station": "KAPF", "shark_teeth": False},
-    "barefoot": {"name": "Barefoot Beach", "mote_id": "28", "tide_id": "8725110", "county": "Collier", "lat": 26.3158, "lon": -81.8353, "nws_station": "KAPF", "shark_teeth": False},
-    "bradenton": {"name": "Bradenton Beach", "mote_id": "64", "tide_id": "8726243", "county": "Manatee", "lat": 27.4695, "lon": -82.6987, "nws_station": "KSRQ", "shark_teeth": False},
-    "anna-maria": {"name": "Anna Maria Island", "mote_id": "62", "tide_id": "8726282", "county": "Manatee", "lat": 27.5273, "lon": -82.7154, "nws_station": "KSRQ", "shark_teeth": False},
-    "holmes": {"name": "Holmes Beach", "mote_id": "142", "tide_id": "8726243", "county": "Manatee", "lat": 27.4984, "lon": -82.7126, "nws_station": "KSRQ", "shark_teeth": False},
-    "st-pete": {"name": "St. Pete Beach", "mote_id": "35", "tide_id": "8726520", "county": "Pinellas", "lat": 27.7253, "lon": -82.7412, "nws_station": "KSPG", "shark_teeth": False},
-    "clearwater": {"name": "Clearwater Beach", "mote_id": "7", "tide_id": "8726724", "county": "Pinellas", "lat": 27.9781, "lon": -82.8317, "nws_station": "KPIE", "shark_teeth": False},
-    "indian-rocks": {"name": "Indian Rocks Beach", "mote_id": "33", "tide_id": "8726724", "county": "Pinellas", "lat": 27.8931, "lon": -82.8482, "nws_station": "KPIE", "shark_teeth": False},
-    "madeira": {"name": "Madeira Beach", "mote_id": "34", "tide_id": "8726520", "county": "Pinellas", "lat": 27.7945, "lon": -82.7840, "nws_station": "KSPG", "shark_teeth": False},
-    "destin": {"name": "Destin", "mote_id": "19", "tide_id": "8729511", "county": "Okaloosa", "lat": 30.3935, "lon": -86.4958, "nws_station": "KDTS", "shark_teeth": False},
-    "pensacola": {"name": "Pensacola Beach", "mote_id": "18", "tide_id": "8729840", "county": "Escambia", "lat": 30.3327, "lon": -87.1414, "nws_station": "KPNS", "shark_teeth": False},
-    "panama-city": {"name": "Panama City Beach", "mote_id": "73", "tide_id": "8729210", "county": "Bay", "lat": 30.1766, "lon": -85.8055, "nws_station": "KECP", "shark_teeth": False}
+    "venice": {"name": "Venice Beach", "mote_id": "6", "tide_id": "8725889", "county": "Sarasota", "lat": 27.1001, "lon": -82.4542, "nws_station": "KVNC", "shark_teeth": True, "coast": "gulf"},
+    "manasota-key": {"name": "Manasota Key Beach", "mote_id": "3", "tide_id": "8725889", "county": "Sarasota", "lat": 27.0125, "lon": -82.4131, "nws_station": "KVNC", "shark_teeth": True, "coast": "gulf"},
+    "siesta": {"name": "Siesta Key Beach", "mote_id": "2", "tide_id": "8726034", "county": "Sarasota", "lat": 27.2662, "lon": -82.5658, "nws_station": "KSRQ", "shark_teeth": False, "coast": "gulf"},
+    "lido": {"name": "Lido Key Beach", "mote_id": "4", "tide_id": "8726034", "county": "Sarasota", "lat": 27.3188, "lon": -82.5786, "nws_station": "KSRQ", "shark_teeth": False, "coast": "gulf"},
+    "caspersen": {"name": "Caspersen Beach", "mote_id": "40", "tide_id": "8725889", "county": "Sarasota", "lat": 27.0700, "lon": -82.4497, "nws_station": "KVNC", "shark_teeth": True, "coast": "gulf"},
+    "nokomis": {"name": "Nokomis Beach", "mote_id": "5", "tide_id": "8725889", "county": "Sarasota", "lat": 27.1264, "lon": -82.4644, "nws_station": "KVNC", "shark_teeth": True, "coast": "gulf"},
+    "englewood": {"name": "Englewood Beach", "mote_id": "42", "tide_id": "8725889", "county": "Charlotte", "lat": 26.9242, "lon": -82.3619, "nws_station": "KPGD", "shark_teeth": True, "coast": "gulf"},
+    "fort-myers": {"name": "Fort Myers Beach", "mote_id": "11", "tide_id": "8725325", "county": "Lee", "lat": 26.4526, "lon": -81.9484, "nws_station": "KFMY", "shark_teeth": False, "coast": "gulf"},
+    "bonita": {"name": "Bonita Beach", "mote_id": "14", "tide_id": "8725110", "county": "Lee", "lat": 26.3308, "lon": -81.8447, "nws_station": "KAPF", "shark_teeth": False, "coast": "gulf"},
+    "vanderbilt": {"name": "Vanderbilt Beach", "mote_id": "29", "tide_id": "8725110", "county": "Collier", "lat": 26.2558, "lon": -81.8253, "nws_station": "KAPF", "shark_teeth": False, "coast": "gulf"},
+    "barefoot": {"name": "Barefoot Beach", "mote_id": "28", "tide_id": "8725110", "county": "Collier", "lat": 26.3158, "lon": -81.8353, "nws_station": "KAPF", "shark_teeth": False, "coast": "gulf"},
+    "bradenton": {"name": "Bradenton Beach", "mote_id": "64", "tide_id": "8726243", "county": "Manatee", "lat": 27.4695, "lon": -82.6987, "nws_station": "KSRQ", "shark_teeth": False, "coast": "gulf"},
+    "anna-maria": {"name": "Anna Maria Island", "mote_id": "62", "tide_id": "8726282", "county": "Manatee", "lat": 27.5273, "lon": -82.7154, "nws_station": "KSRQ", "shark_teeth": False, "coast": "gulf"},
+    "holmes": {"name": "Holmes Beach", "mote_id": "142", "tide_id": "8726243", "county": "Manatee", "lat": 27.4984, "lon": -82.7126, "nws_station": "KSRQ", "shark_teeth": False, "coast": "gulf"},
+    "st-pete": {"name": "St. Pete Beach", "mote_id": "35", "tide_id": "8726520", "county": "Pinellas", "lat": 27.7253, "lon": -82.7412, "nws_station": "KSPG", "shark_teeth": False, "coast": "gulf"},
+    "clearwater": {"name": "Clearwater Beach", "mote_id": "7", "tide_id": "8726724", "county": "Pinellas", "lat": 27.9781, "lon": -82.8317, "nws_station": "KPIE", "shark_teeth": False, "coast": "gulf"},
+    "indian-rocks": {"name": "Indian Rocks Beach", "mote_id": "33", "tide_id": "8726724", "county": "Pinellas", "lat": 27.8931, "lon": -82.8482, "nws_station": "KPIE", "shark_teeth": False, "coast": "gulf"},
+    "madeira": {"name": "Madeira Beach", "mote_id": "34", "tide_id": "8726520", "county": "Pinellas", "lat": 27.7945, "lon": -82.7840, "nws_station": "KSPG", "shark_teeth": False, "coast": "gulf"},
+    "destin": {"name": "Destin", "mote_id": "19", "tide_id": "8729511", "county": "Okaloosa", "lat": 30.3935, "lon": -86.4958, "nws_station": "KDTS", "shark_teeth": False, "coast": "gulf"},
+    "pensacola": {"name": "Pensacola Beach", "mote_id": "18", "tide_id": "8729840", "county": "Escambia", "lat": 30.3327, "lon": -87.1414, "nws_station": "KPNS", "shark_teeth": False, "coast": "gulf"},
+    "panama-city": {"name": "Panama City Beach", "mote_id": "73", "tide_id": "8729210", "county": "Bay", "lat": 30.1766, "lon": -85.8055, "nws_station": "KECP", "shark_teeth": False, "coast": "gulf"},
+    "naples": {"name": "Naples Pier", "mote_id": "49", "tide_id": "8725110", "county": "Collier", "lat": 26.1421, "lon": -81.8077, "nws_station": "KAPF", "shark_teeth": False, "coast": "gulf"},
+    "marco-island": {"name": "Tigertail Beach", "mote_id": "43", "tide_id": "8725110", "county": "Collier", "lat": 25.9764, "lon": -81.7284, "nws_station": "KMKY", "shark_teeth": False, "coast": "gulf"},
+    "south-marco": {"name": "South Marco Beach", "mote_id": "31", "tide_id": "8725110", "county": "Collier", "lat": 25.9298, "lon": -81.7196, "nws_station": "KMKY", "shark_teeth": False, "coast": "gulf"},
+    "brohard": {"name": "Brohard Paw Park", "mote_id": "132", "tide_id": "8725889", "county": "Sarasota", "lat": 27.0788, "lon": -82.4520, "nws_station": "KVNC", "shark_teeth": True, "coast": "gulf"},
+    "miami-beach": {"name": "Miami Beach", "mote_id": "", "tide_id": "8723214", "county": "Miami-Dade", "lat": 25.7826, "lon": -80.1300, "nws_station": "KMIA", "shark_teeth": False, "coast": "atlantic"},
+    "fort-lauderdale": {"name": "Fort Lauderdale Beach", "mote_id": "", "tide_id": "8722899", "county": "Broward", "lat": 26.1224, "lon": -80.1037, "nws_station": "KFLL", "shark_teeth": False, "coast": "atlantic"},
+    "hollywood-beach": {"name": "Hollywood Beach", "mote_id": "", "tide_id": "8722979", "county": "Broward", "lat": 26.0112, "lon": -80.1178, "nws_station": "KFLL", "shark_teeth": False, "coast": "atlantic"},
+    "pompano-beach": {"name": "Pompano Beach", "mote_id": "74", "tide_id": "8722899", "county": "Broward", "lat": 26.2380, "lon": -80.0937, "nws_station": "KPMP", "shark_teeth": False, "coast": "atlantic"},
+    "boca-raton": {"name": "Boca Raton Beach", "mote_id": "", "tide_id": "8722816", "county": "Palm Beach", "lat": 26.3475, "lon": -80.0656, "nws_station": "KBCT", "shark_teeth": False, "coast": "atlantic"},
+    "delray-beach": {"name": "Delray Beach", "mote_id": "", "tide_id": "8722746", "county": "Palm Beach", "lat": 26.4614, "lon": -80.0645, "nws_station": "KBCT", "shark_teeth": False, "coast": "atlantic"},
+    "lake-worth-beach": {"name": "Lake Worth Beach", "mote_id": "37", "tide_id": "8722670", "county": "Palm Beach", "lat": 26.6161, "lon": -80.0331, "nws_station": "KPBI", "shark_teeth": False, "coast": "atlantic"},
+    "palm-beach": {"name": "Palm Beach", "mote_id": "", "tide_id": "8722607", "county": "Palm Beach", "lat": 26.7056, "lon": -80.0364, "nws_station": "KPBI", "shark_teeth": False, "coast": "atlantic"},
+    "jupiter-beach": {"name": "Jupiter Beach", "mote_id": "", "tide_id": "8722495", "county": "Palm Beach", "lat": 26.9342, "lon": -80.0733, "nws_station": "KPBI", "shark_teeth": False, "coast": "atlantic"},
+    "vero-beach": {"name": "Vero Beach", "mote_id": "", "tide_id": "8722105", "county": "Indian River", "lat": 27.6386, "lon": -80.3684, "nws_station": "KVRB", "shark_teeth": False, "coast": "atlantic"},
+    "cocoa-beach": {"name": "Cocoa Beach", "mote_id": "", "tide_id": "8721649", "county": "Brevard", "lat": 28.3200, "lon": -80.6076, "nws_station": "KCOI", "shark_teeth": False, "coast": "atlantic"},
+    "daytona-beach": {"name": "Daytona Beach", "mote_id": "", "tide_id": "8721120", "county": "Volusia", "lat": 29.2108, "lon": -81.0228, "nws_station": "KDAB", "shark_teeth": False, "coast": "atlantic"},
+    "st-augustine-beach": {"name": "St. Augustine Beach", "mote_id": "", "tide_id": "8720587", "county": "St. Johns", "lat": 29.8508, "lon": -81.2648, "nws_station": "KSGJ", "shark_teeth": False, "coast": "atlantic"},
+    "jacksonville-beach": {"name": "Jacksonville Beach", "mote_id": "38", "tide_id": "8720291", "county": "Duval", "lat": 30.2947, "lon": -81.3931, "nws_station": "KCRG", "shark_teeth": False, "coast": "atlantic"},
 }
 
 # Beach Pulse (community reports) is on for every beach by default (see plan.md
@@ -181,6 +209,58 @@ BEACH_CONFIG = {
 # on its entry above — this loop won't override an explicit value.
 for _cfg in BEACH_CONFIG.values():
     _cfg.setdefault("reports_enabled", True)
+
+# --- BEACH AMENITIES (docs/roadmap-ios-launch.md Track 3 — "know before you go") ---
+# Static curated facts, kept separate from BEACH_CONFIG (which is live-fetch
+# wiring). parking: "free" | "paid" | "none"; lifeguard: "year_round" |
+# "seasonal" | "none". FIRST PASS based on general public knowledge as of
+# 2026-07 — fees, seasons, and off-leash rules drift over time in ways that
+# can't be verified the way the NOAA/NWS station IDs above were (those were
+# checked live against the actual APIs). Owner should spot-check before
+# relying on this for launch, per the original Track 3 plan ("owner curates").
+BEACH_AMENITIES = {
+    "venice": {"parking": "free", "parking_notes": "Free lots along Harbor Dr; fill on weekends", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "manasota-key": {"parking": "free", "parking_notes": "Limited free lots", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "none"},
+    "siesta": {"parking": "free", "parking_notes": "Large free lots; fill by mid-morning in season", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "year_round"},
+    "lido": {"parking": "paid", "parking_notes": "Pavilion lot, metered", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "caspersen": {"parking": "free", "parking_notes": "Free lot", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "none"},
+    "nokomis": {"parking": "free", "parking_notes": "Free lot", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "englewood": {"parking": "paid", "parking_notes": "Metered", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "fort-myers": {"parking": "paid", "parking_notes": "Metered lots", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "bonita": {"parking": "paid", "parking_notes": "Metered", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "vanderbilt": {"parking": "paid", "parking_notes": "County parking garage", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "barefoot": {"parking": "paid", "parking_notes": "Nature preserve — county park entry fee", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "none"},
+    "bradenton": {"parking": "free", "parking_notes": "Free street parking", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "anna-maria": {"parking": "free", "parking_notes": "Free street parking, limited", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "holmes": {"parking": "free", "parking_notes": "Free street parking, limited", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "st-pete": {"parking": "paid", "parking_notes": "Metered", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "clearwater": {"parking": "paid", "parking_notes": "Garage + metered", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "year_round"},
+    "indian-rocks": {"parking": "free", "parking_notes": "Limited street parking", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "none"},
+    "madeira": {"parking": "paid", "parking_notes": "Metered, John's Pass area", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "destin": {"parking": "paid", "parking_notes": "Public beach access lots", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "pensacola": {"parking": "free", "parking_notes": "Escambia County beach parking is free", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "panama-city": {"parking": "free", "parking_notes": "Many free county beach accesses", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "naples": {"parking": "paid", "parking_notes": "Metered street parking near the pier", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "marco-island": {"parking": "paid", "parking_notes": "County park entry fee", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "none"},
+    "south-marco": {"parking": "free", "parking_notes": "Limited street parking", "dog_friendly": False, "dog_notes": None, "restrooms": False, "lifeguard": "none"},
+    "brohard": {"parking": "free", "parking_notes": "Free lot at the paw park", "dog_friendly": True, "dog_notes": "Sarasota County's designated off-leash dog beach — county dog beach tag required for non-residents", "restrooms": True, "lifeguard": "none"},
+    "miami-beach": {"parking": "paid", "parking_notes": "Metered + garages", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "year_round"},
+    "fort-lauderdale": {"parking": "paid", "parking_notes": "Metered", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "hollywood-beach": {"parking": "paid", "parking_notes": "Metered along the Broadwalk", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "pompano-beach": {"parking": "paid", "parking_notes": "Metered", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "boca-raton": {"parking": "paid", "parking_notes": "Resident/non-resident rate lots", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "delray-beach": {"parking": "paid", "parking_notes": "Metered", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "lake-worth-beach": {"parking": "paid", "parking_notes": "Metered lot at the pier", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "palm-beach": {"parking": "paid", "parking_notes": "Limited metered", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "jupiter-beach": {"parking": "free", "parking_notes": "Free county park lot", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "vero-beach": {"parking": "free", "parking_notes": "Free lots", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "cocoa-beach": {"parking": "free", "parking_notes": "Free lots", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "daytona-beach": {"parking": "paid", "parking_notes": "Beach driving/parking permit in some areas", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "year_round"},
+    "st-augustine-beach": {"parking": "free", "parking_notes": "Some beach-driving areas require a permit", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "seasonal"},
+    "jacksonville-beach": {"parking": "free", "parking_notes": "Free public lots", "dog_friendly": False, "dog_notes": None, "restrooms": True, "lifeguard": "year_round"},
+}
+for _bid in BEACH_CONFIG:
+    BEACH_AMENITIES.setdefault(_bid, {"parking": "unknown", "parking_notes": None, "dog_friendly": False, "dog_notes": None, "restrooms": None, "lifeguard": "unknown"})
 
 # --- HELPERS ---
 def distance_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -1048,6 +1128,9 @@ def rank_beaches_data(
     near_lon: Optional[float] = None,
     radius_miles: Optional[float] = None,
     when: str = "today",
+    coast: str = "all",
+    dog_friendly: bool = False,
+    free_parking: bool = False,
 ) -> dict:
     activity = activity if activity in VALID_ACTIVITIES else "paddling"
     limit = max(1, min(limit, len(BEACH_CONFIG)))
@@ -1057,8 +1140,20 @@ def rank_beaches_data(
     active_radius = requested_radius if use_nearby else None
     radius_expanded = False
 
+    def _passes_filters(candidate_id: str, config: dict) -> bool:
+        if coast != "all" and config.get("coast") != coast:
+            return False
+        amenities = BEACH_AMENITIES.get(candidate_id, {})
+        if dog_friendly and not amenities.get("dog_friendly"):
+            return False
+        if free_parking and amenities.get("parking") != "free":
+            return False
+        return True
+
     candidates = []
     for candidate_id, config in BEACH_CONFIG.items():
+        if not _passes_filters(candidate_id, config):
+            continue
         data = GLOBAL_DATA_STORE.get(candidate_id)
         if not data or data.get("error"):
             continue
@@ -1073,6 +1168,8 @@ def rank_beaches_data(
         active_radius = FALLBACK_NEARBY_RADIUS_MILES
         radius_expanded = True
         for candidate_id, config in BEACH_CONFIG.items():
+            if not _passes_filters(candidate_id, config):
+                continue
             data = GLOBAL_DATA_STORE.get(candidate_id)
             if not data or data.get("error"):
                 continue
@@ -1099,6 +1196,7 @@ def rank_beaches_data(
             "red_tide": data.get("red_tide", {}).get("status", "Not Present"),
             "jellyfish": data.get("mote_extras", {}).get("jellyfish", "None"),
             "summary": _rank_summary(data, activity, when=when),
+            "amenities": BEACH_AMENITIES.get(candidate_id),
         }
         if dist is not None:
             entry["distance_miles"] = round(dist, 1)
@@ -1925,6 +2023,7 @@ async def get_beach_conditions_api(beach_id: str, max_age: int = 0):
     # Beach Pulse: additive, never breaks this response (build_beach_pulse swallows errors).
     reports_on = BEACH_CONFIG.get(beach_id, {}).get("reports_enabled", False)
     data["beach_pulse"] = await asyncio.to_thread(reports.build_beach_pulse, beach_id, reports_on)
+    data["amenities"] = BEACH_AMENITIES.get(beach_id)
     return data
 
 # --- BEACH PULSE (community reports) ROUTES ---
@@ -2018,11 +2117,15 @@ async def rank_beaches_api(
     near_lat: Optional[float] = None,
     near_lon: Optional[float] = None,
     radius_miles: Optional[float] = None,
+    dog_friendly: bool = False,
+    free_parking: bool = False,
 ):
     if when not in ("today", "tomorrow"):
         raise HTTPException(status_code=400, detail="when must be 'today' or 'tomorrow'")
     if activity not in VALID_ACTIVITIES:
         raise HTTPException(status_code=400, detail=f"activity must be one of: {', '.join(sorted(VALID_ACTIVITIES))}")
+    if coast not in ("all", "gulf", "atlantic"):
+        raise HTTPException(status_code=400, detail="coast must be 'all', 'gulf', or 'atlantic'")
     if beach_id and beach_id not in BEACH_CONFIG:
         raise HTTPException(status_code=400, detail=f"Unknown beach_id: {beach_id}")
     if (near_lat is None) ^ (near_lon is None):
@@ -2040,6 +2143,9 @@ async def rank_beaches_api(
         near_lon=near_lon,
         radius_miles=radius_miles,
         when=when,
+        coast=coast,
+        dog_friendly=dog_friendly,
+        free_parking=free_parking,
     )
 
 @app.get("/health")

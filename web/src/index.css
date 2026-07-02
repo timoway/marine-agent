@@ -1630,3 +1630,45 @@ body {
 .onboarding-beach-item:hover { border-color: #3b82f6; background-color: rgba(59, 130, 246, 0.1); }
 .onboarding-beach-name { flex: 1; font-weight: 600; }
 .onboarding-beach-dist { font-size: 0.78rem; color: #64748b; }
+
+/* --- Track 3: rank filters + know-before-you-go --- */
+.rank-filter-chips { display: flex; gap: 6px; margin-bottom: 10px; }
+.rank-filter-chip { flex: 1; }
+.rank-filter-chip.active {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border-color: transparent;
+  color: white;
+}
+
+.amenities-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(51, 65, 85, 0.6);
+}
+.amenities-fact-wrap { display: flex; flex-direction: column; }
+.amenities-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0;
+  cursor: default;
+}
+.amenities-fact-wrap.has-note .amenities-fact { cursor: pointer; color: #cbd5e1; }
+.amenities-fact.highlight { color: #f472b6; }
+.amenities-chevron { transition: transform 0.15s ease; }
+.amenities-chevron.open { transform: rotate(180deg); }
+.amenities-note {
+  margin: 4px 0 0;
+  font-size: 0.72rem;
+  color: #64748b;
+  max-width: 220px;
+  line-height: 1.4;
+}

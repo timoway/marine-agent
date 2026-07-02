@@ -10,10 +10,11 @@ import ErrorBoundary from './ErrorBoundary';
 import { apiFetch, waitForApiReady } from './api';
 import { useMediaQuery } from './useMediaQuery';
 import { formatFloridaTime } from './format';
-import type { Beach, BeachPulse } from './types';
+import type { Beach, BeachPulse, BeachAmenities } from './types';
 import { BeachPulseBadge, ReportFab, CommunityReports, useSession } from './BeachPulse';
 import { AccountMenu } from './AccountMenu';
 import { OnboardingSheet } from './Onboarding';
+import { AmenitiesRow } from './Amenities';
 import { useFavorites } from './favorites';
 import { distanceMiles, type Coords } from './geo';
 import { supabase } from './supabase';
@@ -125,6 +126,7 @@ interface MarineData {
   clarity: { label: string; feet: number; };
   data_quality?: DataQuality;
   beach_pulse?: BeachPulse;
+  amenities?: BeachAmenities | null;
 }
 
 function redTideColor(status: string | undefined): string {
@@ -184,6 +186,8 @@ function App() {
   const [planningHorizon, setPlanningHorizon] = useState<PlanningHorizon>('today');
   const [rankActivity, setRankActivity] = useState<RankActivity>('paddling');
   const [rankData, setRankData] = useState<RankResponse | null>(null);
+  const [rankDogFriendly, setRankDogFriendly] = useState(false);
+  const [rankFreeParking, setRankFreeParking] = useState(false);
   const [rankLoading, setRankLoading] = useState(false);
   const [rankError, setRankError] = useState<string | null>(null);
   const [wakingUp, setWakingUp] = useState(false);
@@ -332,6 +336,8 @@ function App() {
       radius_miles: String(RANK_RADIUS_MILES),
       limit: '5',
     });
+    if (rankDogFriendly) params.set('dog_friendly', 'true');
+    if (rankFreeParking) params.set('free_parking', 'true');
     apiFetch<RankResponse>(`/rank?${params}`)
       .then(json => {
         if (!cancelled) {
@@ -348,7 +354,7 @@ function App() {
         }
       });
     return () => { cancelled = true; };
-  }, [selectedBeach, rankActivity, planningHorizon]);
+  }, [selectedBeach, rankActivity, planningHorizon, rankDogFriendly, rankFreeParking]);
 
   const rankAnchorName = useMemo(() => {
     const beach = beaches.find(b => b.id === selectedBeach);
@@ -459,6 +465,22 @@ function App() {
                 {RANK_ACTIVITY_LABELS[activity]}
               </button>
             ))}
+          </div>
+          <div className="rank-filter-chips">
+            <button
+              type="button"
+              className={`rank-chip rank-filter-chip ${rankDogFriendly ? 'active' : ''}`}
+              onClick={() => setRankDogFriendly(v => !v)}
+            >
+              🐕 Dog-friendly
+            </button>
+            <button
+              type="button"
+              className={`rank-chip rank-filter-chip ${rankFreeParking ? 'active' : ''}`}
+              onClick={() => setRankFreeParking(v => !v)}
+            >
+              🅿️ Free parking
+            </button>
           </div>
           {rankLoading ? (
             <p className="rank-empty">Updating rankings…</p>
@@ -675,6 +697,7 @@ function App() {
                   </div>
                 </div>
               </div>
+              <AmenitiesRow amenities={data.amenities} />
             </div>
 
             <div className="header desktop-only">
@@ -724,6 +747,7 @@ function App() {
                    <Flag size={20} color={data.outlook?.color} fill={data.outlook?.color} />
                 </div>
               </div>
+              <AmenitiesRow amenities={data.amenities} />
             </div>
 
             <div className="grid">

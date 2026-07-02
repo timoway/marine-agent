@@ -8,6 +8,16 @@ export interface Beach {
   radar_nearby?: boolean;
 }
 
+// "Know before you go" — curated static facts, not live-fetched (Track 3).
+export interface BeachAmenities {
+  parking: 'free' | 'paid' | 'none' | 'unknown';
+  parking_notes: string | null;
+  dog_friendly: boolean;
+  dog_notes: string | null;
+  restrooms: boolean | null;
+  lifeguard: 'year_round' | 'seasonal' | 'none' | 'unknown';
+}
+
 export interface MapFocus {
   longitude: number;
   latitude: number;

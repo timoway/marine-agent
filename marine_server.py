@@ -11,7 +11,7 @@ from typing import Optional, List, Dict, Tuple
 from functools import lru_cache
 from cachetools import TTLCache, cached
 from PIL import Image
-from fastapi import FastAPI, HTTPException, Header, Depends
+from fastapi import FastAPI, HTTPException, Header, Depends, Response
 from fastapi.middleware.cors import CORSMiddleware
 from mcp.server.fastmcp import FastMCP
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -1968,6 +1968,19 @@ async def list_reports(beach_id: str):
         raise HTTPException(status_code=400, detail=f"Unknown beach_id: {beach_id}")
     rows = await asyncio.to_thread(reports.get_reports_for_beach, beach_id)
     return {"beach_id": beach_id, "reports": rows}
+
+@app.get("/api/me/reports")
+async def my_reports(reporter_id: str = Depends(require_reporter)):
+    rows = await asyncio.to_thread(reports.get_reports_for_user, reporter_id)
+    return {"reports": rows}
+
+@app.delete("/api/me", status_code=204)
+async def delete_me(reporter_id: str = Depends(require_reporter)):
+    try:
+        await asyncio.to_thread(reports.delete_account, reporter_id)
+    except reports.ReportError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc))
+    return Response(status_code=204)
 
 @app.get("/api/rank")
 async def rank_beaches_api(

@@ -268,6 +268,44 @@ def get_reports_for_beach(beach_id: str) -> List[dict]:
         return []
 
 
+def get_reports_for_user(reporter_id: str) -> List[dict]:
+    """All of the caller's own reports (any status, incl. held) — 'My reports'."""
+    client = _get_client()
+    if client is None:
+        return []
+    try:
+        res = (
+            client.table("reports")
+            .select("id,beach_id,report_type,severity_tier,notes,status,created_at")
+            .eq("reporter_id", reporter_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return res.data or []
+    except Exception as exc:
+        print(f"[REPORTS] get_reports_for_user failed: {str(exc)[:100]}")
+        return []
+
+
+# --- Account deletion (docs/roadmap-ios-launch.md §2b: aggregate-then-delete) ---
+def delete_account(reporter_id: str) -> None:
+    """Fold the user's reports into identity-free daily counts, then delete their
+    auth user — the FK cascade removes their identified rows. Aggregation runs
+    first and is atomic (a single SQL statement via RPC); deletion is a separate
+    step so a failure here never loses the aggregate that already landed."""
+    client = _get_client()
+    if client is None:
+        raise ReportError("account deletion not available", status=503)
+    try:
+        client.rpc("aggregate_reports_before_delete", {"p_reporter_id": reporter_id}).execute()
+    except Exception as exc:
+        raise ReportError(f"could not aggregate reports before deletion: {str(exc)[:100]}", status=502)
+    try:
+        client.auth.admin.delete_user(reporter_id)
+    except Exception as exc:
+        raise ReportError(f"account deletion failed: {str(exc)[:100]}", status=502)
+
+
 def build_beach_pulse(beach_id: str, reports_enabled: bool = True) -> dict:
     """Aggregate today's reports into the `beach_pulse` object for /api/conditions.
 

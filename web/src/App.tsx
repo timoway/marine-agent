@@ -61,6 +61,23 @@ const RANK_ACTIVITY_LABELS: Record<RankActivity, string> = {
 
 type PlanningHorizon = 'today' | 'tomorrow';
 
+const RANK_DOG_KEY = 'marineagent-rank-dog-friendly';
+const RANK_PARKING_KEY = 'marineagent-rank-free-parking';
+
+function readStoredFlag(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function storeFlag(key: string, value: boolean) {
+  try {
+    localStorage.setItem(key, value ? '1' : '0');
+  } catch { /* private mode */ }
+}
+
 function readStoredHomeBeach(): string | null {
   try {
     return localStorage.getItem(HOME_BEACH_KEY);
@@ -186,8 +203,22 @@ function App() {
   const [planningHorizon, setPlanningHorizon] = useState<PlanningHorizon>('today');
   const [rankActivity, setRankActivity] = useState<RankActivity>('paddling');
   const [rankData, setRankData] = useState<RankResponse | null>(null);
-  const [rankDogFriendly, setRankDogFriendly] = useState(false);
-  const [rankFreeParking, setRankFreeParking] = useState(false);
+  const [rankDogFriendly, setRankDogFriendlyState] = useState<boolean>(() => readStoredFlag(RANK_DOG_KEY));
+  const [rankFreeParking, setRankFreeParkingState] = useState<boolean>(() => readStoredFlag(RANK_PARKING_KEY));
+  const setRankDogFriendly = (updater: boolean | ((v: boolean) => boolean)) => {
+    setRankDogFriendlyState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      storeFlag(RANK_DOG_KEY, next);
+      return next;
+    });
+  };
+  const setRankFreeParking = (updater: boolean | ((v: boolean) => boolean)) => {
+    setRankFreeParkingState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      storeFlag(RANK_PARKING_KEY, next);
+      return next;
+    });
+  };
   const [rankLoading, setRankLoading] = useState(false);
   const [rankError, setRankError] = useState<string | null>(null);
   const [wakingUp, setWakingUp] = useState(false);

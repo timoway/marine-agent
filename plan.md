@@ -3,7 +3,7 @@
 > **Where to store memory:** Keep project state here in `plan.md` (version-controlled, survives new sessions, agents read it on clone). README `## Roadmap` stays a short public checklist — sync both when shipping. Optional: Grok/Cursor user memory for personal prefs only, not task state.
 
 **Production:** [marine-agent.vercel.app](https://marine-agent.vercel.app) · API [marine-agent.onrender.com](https://marine-agent.onrender.com)  
-**Last plan update:** 2026-07-01 · **Latest commit:** see `git log -1`
+**Last plan update:** 2026-07-02 · **Latest commit:** see `git log -1`
 
 ---
 
@@ -20,12 +20,16 @@
 - [x] MCP tools: `get_beach_conditions`, `rank_beaches` (incl. `when=tomorrow`)
 - [x] Tide fixes (Sarasota/Manatee stations), cold-start / rank tiers
 - [x] Surf period plain-language note; surf paired with shark/water above forecast
+- [x] **Beach Pulse Phases A+B (2026-07-02)** — Google sign-in, one-tap reports, verdict-adjacent badge, community list; first real report verified end-to-end in production
 
 ---
 
 ## Next up (priority order)
 
-### 1. Beach Pulse — user reports (killer differentiator)
+### 1. iOS v1 launch readiness — see [`docs/roadmap-ios-launch.md`](docs/roadmap-ios-launch.md)
+**The active plan.** Six tracks, ~15–17 dev days to TestFlight: accounts & deletion (App Store blocker), speed-to-verdict (keep-warm + geolocation + onboarding), beach knowledge (Phase E pulled forward, incl. dog-friendly/parking rank filters), community trust (moderation runbook, report undo, 🏅 render path), compliance & hardening (privacy/terms, analytics, CI, pinned deps), sunlight theme + design system, then the native shell. Owner decisions locked 2026-07-02 in that doc; **app name + domain still open and gates the native phase.**
+
+### 2. Beach Pulse follow-ons (post-launch unless noted)
 **Goal:** the actual bet — fuse NOAA/NWS data with real-time community reports into one trustworthy signal, in a way Mote's broken report flow doesn't. Full spec: *Beach Pulse — full spec* section below. **Developer build guide (accounts → SQL → backend → frontend, with acceptance criteria):** [`docs/handoff-beach-pulse.md`](docs/handoff-beach-pulse.md). Broken into shippable phases, in dependency order:
 
 | Phase | Scope | Effort |
@@ -36,11 +40,12 @@
 | D — Historical (defer) | Daily aggregate job, history endpoint, trend sparkline — lowest priority; needs weeks/months of data to be meaningful regardless of when it's built | ~1.5 days |
 | E — Beach info page (new) | Static per-beach amenities: parking (paid/free/none), dog rules, restrooms, lifeguard — curated `BEACH_CONFIG` fields or Google Places, NOT user reports. Owner feedback 2026-07-01: static facts don't belong in the report grid | ~1–2 days |
 
-Phases A+B are the MVP — a beach card with a working, visible Beach Pulse badge. C–E are follow-ons once real usage exists.
+**A+B shipped 2026-07-02** (see Shipped list). C stays post-launch (needs volume); D partially pulled into the launch plan (aggregates table ships with account deletion — see roadmap §2b); E pulled fully into the launch plan (roadmap Track 3).
 
 **Category decisions (2026-07-01, owner feedback):** `dog` removed from report types (static fact → Phase E); `parking` kept but reframed as real-time "Parking full" (crowd-adjacent signal, genuinely reportable); `wildlife` added (🐬, low tier, optional 140-char note for manatee/whale shark/alligator/etc.) — shark stays its own preset. No open "Other" free-text category: the optional note on wildlife covers the long tail without creating an unmoderated text surface.
 
-### 2. In-app chat — highest product gap
+### 3. In-app chat — **moved post-launch (owner decision 2026-07-02)**
+Was priority #2; re-sequenced behind iOS launch readiness — verdict + rank + pulse already answer the core questions, and chat delayed App Store blockers.
 **Goal:** “Best paddle near Venice today?” inside the PWA.
 
 | Step | Effort | Notes |
@@ -51,16 +56,16 @@ Phases A+B are the MVP — a beach card with a working, visible Beach Pulse badg
 
 **Skip for production:** Streamlit (dev-only). **Optional fast path:** Telegram bot for share-with-family.
 
-### 3. Tomorrow polish (v1.1)
+### 4. Tomorrow polish (v1.1)
 - [ ] Tomorrow **wind** from NWS period text or Open-Meteo (rank still uses current wind obs)
 - [ ] Hero **Detailed Forecast** card: show tomorrow period when planning toggle = Tomorrow
 - [ ] Dedupe Water & Algae card JSX in `App.tsx` (minor refactor)
 
-### 4. Atlantic coast expansion
+### 5. Atlantic coast expansion
 - [ ] Add East Coast beaches to `BEACH_CONFIG` (tide stations, NWS points, Mote fallbacks)
 - [ ] `coast` filter on `/api/rank` (param exists, not fully used)
 
-### 5. Ops / quality backlog
+### 6. Ops / quality backlog
 - [ ] README: align copy (“Today’s outlook” not “Today’s Verdict” everywhere)
 - [ ] FWC red tide SSL (`verify=False` workaround)
 - [ ] `get_beach_key()` fuzzy-match edge cases (e.g. substring “key”)
@@ -68,7 +73,7 @@ Phases A+B are the MVP — a beach card with a working, visible Beach Pulse badg
 - [ ] Request-level TTLCache on hot fetchers (`_get_nws_obs`, etc.)
 - [ ] `websockets` pinned back to 15.0.1 by `supabase` (its `realtime` sub-package). We don't use Supabase Realtime or any WebSockets and the live deploy is healthy, so it's benign — fix only if a WS/MCP issue surfaces. Options if needed: depend on `postgrest` directly instead of the `supabase` meta-package, or pin `websockets` and test the MCP/SSE stack.
 
-### 6. Later
+### 7. Later
 - [ ] Native iOS (Capacitor + TestFlight) if PWA isn't enough
   - [ ] Lock bundle ID / custom URL scheme early (e.g. `com.marineagent.app`) — Supabase Auth redirect URIs register against it; expensive to change once live
   - [ ] Build `/api/auth/callback` (Beach Pulse spec) transport-agnostic — verify an OAuth identity token, don't assume a web-redirect flow, so swapping web sign-in for a native Capacitor Apple/Google SDK later needs no backend change

@@ -88,6 +88,12 @@
 
 ## 4. Track 3 — Beach knowledge (Phase E, pulled forward)
 
+**Status (2026-07-02): DONE, deployed, live-verified.**
+- **Beach list grew 21 → 39** (owner request, reopening the earlier "focus the 21" decision at their explicit direction): 4 Gulf gaps filled in the already-covered Collier/Sarasota region (Naples Pier, Tigertail + South Marco on Marco Island, and **Brohard Paw Park** — Venice's dog beach) plus **14 Atlantic coast beaches** (Jacksonville Beach → Miami Beach), added at "full comprehensive coverage" per owner's answer when asked to scope it. Every tide/NWS station was verified live against NOAA CO-OPS and api.weather.gov (not guessed) before merging; Mote IDs confirmed via Mote's own GraphQL API. A `coast` field (gulf/atlantic) now actually backs the `/api/rank` `coast` param that previously existed but did nothing.
+- `BEACH_AMENITIES` (parking/dog_friendly/dog_notes/restrooms/lifeguard) added for all 39 beaches, injected into `/api/conditions` as `amenities`. **This data is a first pass from general public knowledge, not live-verified the way the station IDs were** (fees/policies drift in ways no API check catches) — flagged in code; owner should spot-check before fully relying on it, per the original "owner curates" plan this pulled forward from.
+- "Know before you go" (`AmenitiesRow`) shipped under both mobile/desktop headers — plain icon+label facts, tap-to-expand notes, verified visually in preview against the live API.
+- **Dog-friendly / Free-parking rank filter chips**: shipped, wired to real `/api/rank` params, verified live (filtering to dog-friendly correctly narrows a 5-result list down to exactly Brohard).
+
 **Goal:** answer the #2 question ("which beach?") with the facts regular beachgoers actually rank by — parking, dogs, restrooms — which official feeds will never provide and which competitors bury in walls of text.
 
 - Extend `BEACH_CONFIG` per beach: `parking: 'free'|'paid'|'street'|'none'`, `parking_notes` (short), `dog_friendly: bool`, `dog_notes`, `restrooms: bool`, `lifeguard: 'seasonal'|'year_round'|'none'`, `entry_fee`. **Owner curates the 21 beaches** — a day of desk research, no API dependency. (Google Places later if it ever needs to scale; not for 21 beaches.)
@@ -176,7 +182,7 @@ Unchanged from `plan.md` (Capacitor + TestFlight, bundle ID lock, Sign in with A
 - **In-app chat** — moved post-launch (owner decision below). The verdict + rank + pulse already answer the three core questions; chat is a power-user layer, not launch-critical.
 - Leaderboard / points UI (Phase C ships silently, badge only).
 - Historical trend charts (Phase D — needs months of data regardless).
-- Atlantic coast expansion (focus the 21; expansion dilutes seeding).
+- ~~Atlantic coast expansion~~ — reopened and shipped 2026-07-02 at owner's explicit direction (Track 3). Reporting seeding is still Gulf-only (the 5 founder-visited beaches); Atlantic beaches have official-data coverage but no community-report density yet — that's expected, not a bug.
 - SMS digests, email digests (post-launch; needs the domain first anyway).
 - Admin moderation UI (runbook suffices at founder scale).
 

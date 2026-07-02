@@ -9,7 +9,7 @@
 
 ## Shipped (dashboard + API)
 
-- [x] PWA + Render API, 21 Gulf beaches, map sync, official flag colors
+- [x] PWA + Render API, 39 beaches (25 Gulf + 14 Atlantic, expanded 2026-07-02), map sync, official flag colors
 - [x] Unified outlook — water now vs plan (time-of-day: today / tonight / tomorrow)
 - [x] Activity status (paddling, swimming, beach) with per-activity reasons
 - [x] Nearby ranking `/api/rank` within 50 mi (today + tomorrow)
@@ -21,6 +21,7 @@
 - [x] Tide fixes (Sarasota/Manatee stations), cold-start / rank tiers
 - [x] Surf period plain-language note; surf paired with shark/water above forecast
 - [x] **Beach Pulse Phases A+B (2026-07-02)** — Google sign-in, one-tap reports, verdict-adjacent badge, community list; first real report verified end-to-end in production
+- [x] **iOS roadmap Tracks 1–3 (2026-07-02)** — account menu (My Reports, sign out, delete-account with verified aggregate-then-delete), favorite beaches, keep-warm + skeleton UI + first-run onboarding + near-me, and "know before you go" amenities + dog-friendly/free-parking rank filters across all 39 beaches. See `docs/roadmap-ios-launch.md`.
 
 ---
 

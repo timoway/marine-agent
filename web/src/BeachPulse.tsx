@@ -6,6 +6,7 @@ import { apiFetch, apiPost, ApiError } from './api';
 import type { BeachPulse, CommunityReport, ReportType } from './types';
 
 // Category metadata — keys match the backend SEVERITY_TIER report_type keys.
+// 'wildlife' takes an optional note (e.g. "manatee", "alligator") — see NOTE_TYPES.
 export const REPORT_CATEGORIES: { type: ReportType; icon: string; label: string }[] = [
   { type: 'jellyfish', icon: '🪼', label: 'Jellyfish' },
   { type: 'riptide', icon: '🌀', label: 'Riptide' },
@@ -17,9 +18,12 @@ export const REPORT_CATEGORIES: { type: ReportType; icon: string; label: string 
   { type: 'clarity', icon: '👁️', label: 'Water clarity' },
   { type: 'debris', icon: '🗑️', label: 'Debris' },
   { type: 'crowd', icon: '👥', label: 'Crowd' },
-  { type: 'parking', icon: '🅿️', label: 'Parking' },
-  { type: 'dog', icon: '🐕', label: 'Dog-friendly' },
+  { type: 'parking', icon: '🅿️', label: 'Parking full' },
+  { type: 'wildlife', icon: '🐬', label: 'Wildlife' },
 ];
+
+// Types that show an optional free-text note before submitting.
+const NOTE_TYPES = new Set<ReportType>(['wildlife']);
 
 const CATEGORY_BY_TYPE = Object.fromEntries(
   REPORT_CATEGORIES.map(c => [c.type, c]),
@@ -86,14 +90,20 @@ export function ReportFab({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<ReportType | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [noteFor, setNoteFor] = useState<ReportType | null>(null);
+  const [noteText, setNoteText] = useState('');
 
   const doSubmit = useCallback(
-    async (beach: string, type: ReportType, token: string) => {
+    async (beach: string, type: ReportType, token: string, notes?: string) => {
       setBusy(type);
       setMessage(null);
       try {
-        await apiPost('/reports', { beach_id: beach, report_type: type }, token);
+        const body: Record<string, unknown> = { beach_id: beach, report_type: type };
+        if (notes && notes.trim()) body.notes = notes.trim().slice(0, 140);
+        await apiPost('/reports', body, token);
         setMessage(`Thanks — ${CATEGORY_BY_TYPE[type]?.label ?? type} report submitted.`);
+        setNoteFor(null);
+        setNoteText('');
         onSubmitted();
         setTimeout(() => {
           setOpen(false);
@@ -121,18 +131,18 @@ export function ReportFab({
     if (!raw) return;
     localStorage.removeItem(PENDING_KEY);
     try {
-      const pending = JSON.parse(raw) as { beachId: string; type: ReportType };
+      const pending = JSON.parse(raw) as { beachId: string; type: ReportType; notes?: string };
       if (pending.beachId && pending.type) {
         setOpen(true);
-        void doSubmit(pending.beachId, pending.type, session.access_token);
+        void doSubmit(pending.beachId, pending.type, session.access_token, pending.notes);
       }
     } catch { /* ignore malformed pending */ }
   }, [session, doSubmit]);
 
-  const onCategory = useCallback(
-    (type: ReportType) => {
+  const submitOrSignIn = useCallback(
+    (type: ReportType, notes?: string) => {
       if (session) {
-        void doSubmit(beachId, type, session.access_token);
+        void doSubmit(beachId, type, session.access_token, notes);
         return;
       }
       if (!supabase) {
@@ -140,7 +150,7 @@ export function ReportFab({
         return;
       }
       // Stash the intent, then sign in — the effect above resubmits on return.
-      localStorage.setItem(PENDING_KEY, JSON.stringify({ beachId, type }));
+      localStorage.setItem(PENDING_KEY, JSON.stringify({ beachId, type, notes }));
       void supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: window.location.origin },
@@ -148,6 +158,24 @@ export function ReportFab({
     },
     [beachId, session, doSubmit],
   );
+
+  const onCategory = useCallback(
+    (type: ReportType) => {
+      if (NOTE_TYPES.has(type)) {
+        // Show the optional-note step instead of submitting immediately.
+        setNoteFor(type);
+        setNoteText('');
+        setMessage(null);
+        return;
+      }
+      submitOrSignIn(type);
+    },
+    [submitOrSignIn],
+  );
+
+  const signOut = useCallback(() => {
+    if (supabase) void supabase.auth.signOut();
+  }, []);
 
   return (
     <>
@@ -178,24 +206,58 @@ export function ReportFab({
                 <X size={18} />
               </button>
             </div>
-            {!session && (
+            {session ? (
+              <p className="pulse-sheet-note">
+                Signed in as {session.user.email ?? 'Google user'} ·{' '}
+                <button className="pulse-signout" onClick={signOut}>Sign out</button>
+              </p>
+            ) : (
               <p className="pulse-sheet-note">You'll sign in with Google first (one tap).</p>
             )}
-            <div className="pulse-grid">
-              {REPORT_CATEGORIES.map(cat => (
-                <button
-                  key={cat.type}
-                  className="pulse-cat"
-                  disabled={busy !== null}
-                  onClick={() => onCategory(cat.type)}
-                >
-                  <span className="pulse-cat-icon">{cat.icon}</span>
-                  <span className="pulse-cat-label">
-                    {busy === cat.type ? 'Sending…' : cat.label}
-                  </span>
-                </button>
-              ))}
-            </div>
+            {noteFor ? (
+              <div className="pulse-note-step">
+                <p className="pulse-sheet-note">
+                  {CATEGORY_BY_TYPE[noteFor]?.icon} What did you see? (optional)
+                </p>
+                <input
+                  className="pulse-note-input"
+                  type="text"
+                  maxLength={140}
+                  placeholder="e.g. manatee, whale shark, alligator"
+                  value={noteText}
+                  onChange={e => setNoteText(e.target.value)}
+                  autoFocus
+                />
+                <div className="pulse-note-actions">
+                  <button className="pulse-note-cancel" onClick={() => setNoteFor(null)}>
+                    Back
+                  </button>
+                  <button
+                    className="pulse-note-send"
+                    disabled={busy !== null}
+                    onClick={() => submitOrSignIn(noteFor, noteText)}
+                  >
+                    {busy === noteFor ? 'Sending…' : 'Submit report'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="pulse-grid">
+                {REPORT_CATEGORIES.map(cat => (
+                  <button
+                    key={cat.type}
+                    className="pulse-cat"
+                    disabled={busy !== null}
+                    onClick={() => onCategory(cat.type)}
+                  >
+                    <span className="pulse-cat-icon">{cat.icon}</span>
+                    <span className="pulse-cat-label">
+                      {busy === cat.type ? 'Sending…' : cat.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
             {message && <p className="pulse-sheet-message">{message}</p>}
           </div>
         </div>

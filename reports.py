@@ -26,15 +26,15 @@ SPIKE_WINDOW_MIN = 15            # ...within this window, all from low-trust acc
 LOCAL_GUIDE_THRESHOLD = 3        # corroborated reports at a beach → Local Guide (Phase C)
 
 SEVERITY_TIER = {
-    "clarity": "low", "crowd": "low", "dog": "low",
+    "clarity": "low", "crowd": "low", "wildlife": "low",
     "parking": "low", "debris": "low", "algae": "low",
     "dead_fish": "moderate", "surf": "moderate", "jellyfish": "moderate",
     "riptide": "high", "shark": "high", "red_tide": "high",
 }
 CORROBORATION_WINDOWS_MIN = {    # type-specific freshness for corroboration/escalation
     "riptide": 120, "shark": 120,                       # time-sensitive
-    "jellyfish": 240, "surf": 240, "dead_fish": 240, "red_tide": 240,
-    "clarity": 360, "crowd": 360, "dog": 360,
+    "jellyfish": 240, "surf": 240, "dead_fish": 240, "red_tide": 240, "wildlife": 240,
+    "clarity": 360, "crowd": 360,
     "parking": 360, "debris": 360, "algae": 360,
 }
 VALID_REPORT_TYPES = frozenset(SEVERITY_TIER.keys())

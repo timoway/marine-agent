@@ -16,7 +16,7 @@ export interface MapFocus {
 
 // --- Beach Pulse (community reports) ---
 export type ReportType =
-  | 'clarity' | 'crowd' | 'dog' | 'parking' | 'debris' | 'algae'
+  | 'clarity' | 'crowd' | 'wildlife' | 'parking' | 'debris' | 'algae'
   | 'dead_fish' | 'surf' | 'jellyfish' | 'riptide' | 'shark' | 'red_tide';
 
 export interface BeachPulseCount {

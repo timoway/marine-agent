@@ -34,8 +34,11 @@
 | B — Ship MVP | `GET /api/reports/{beach_id}` + `/api/conditions` integration, Report FAB, Beach Pulse badge (adjacent to verdict), `reports_enabled: true` default across all `BEACH_CONFIG` beaches | ~2 days |
 | C — Trust layer | `reporter_beach_standing` table + Local Guide auto-promotion, community reports list with 🏅 marking | ~0.5 day |
 | D — Historical (defer) | Daily aggregate job, history endpoint, trend sparkline — lowest priority; needs weeks/months of data to be meaningful regardless of when it's built | ~1.5 days |
+| E — Beach info page (new) | Static per-beach amenities: parking (paid/free/none), dog rules, restrooms, lifeguard — curated `BEACH_CONFIG` fields or Google Places, NOT user reports. Owner feedback 2026-07-01: static facts don't belong in the report grid | ~1–2 days |
 
-Phases A+B are the MVP — a beach card with a working, visible Beach Pulse badge. C and D are follow-ons once real usage exists.
+Phases A+B are the MVP — a beach card with a working, visible Beach Pulse badge. C–E are follow-ons once real usage exists.
+
+**Category decisions (2026-07-01, owner feedback):** `dog` removed from report types (static fact → Phase E); `parking` kept but reframed as real-time "Parking full" (crowd-adjacent signal, genuinely reportable); `wildlife` added (🐬, low tier, optional 140-char note for manatee/whale shark/alligator/etc.) — shark stays its own preset. No open "Other" free-text category: the optional note on wildlife covers the long tail without creating an unmoderated text surface.
 
 ### 2. In-app chat — highest product gap
 **Goal:** “Best paddle near Venice today?” inside the PWA.
@@ -92,8 +95,8 @@ Phases A+B are the MVP — a beach card with a working, visible Beach Pulse badg
 |----------|------|----------------|
 | Water clarity | 👁️ | Low — publishes on 1 verified report |
 | Crowd level | 👥 | Low |
-| Dog-friendly confirmation | 🐕 | Low |
-| Parking (full/available) | 🅿️ | Low |
+| Wildlife sighting (manatee, gator…) | 🐬 | Low — optional note; shark stays separate |
+| Parking full (real-time) | 🅿️ | Low |
 | Debris / Trash | 🗑️ | Low |
 | Algae / Seaweed | 🌿 | Low — complements FWC HAB data |
 | Dead fish | 🐟 | Moderate — often correlates with red tide |

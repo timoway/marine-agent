@@ -360,12 +360,16 @@ function App() {
     let cancelled = false;
     setRankLoading(true);
     setRankError(null);
+    const filtering = rankDogFriendly || rankFreeParking;
     const params = new URLSearchParams({
       activity: rankActivity,
       when: planningHorizon,
       beach_id: selectedBeach,
       radius_miles: String(RANK_RADIUS_MILES),
-      limit: '5',
+      // "Which nearby beaches have X?" is a browse-by-distance question, not
+      // a best-conditions-first one — show the full nearby set, closest first.
+      limit: filtering ? '25' : '5',
+      sort: filtering ? 'distance' : 'condition',
     });
     if (rankDogFriendly) params.set('dog_friendly', 'true');
     if (rankFreeParking) params.set('free_parking', 'true');

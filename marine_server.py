@@ -1133,6 +1133,7 @@ def rank_beaches_data(
     coast: str = "all",
     dog_friendly: bool = False,
     free_parking: bool = False,
+    sort_by: str = "condition",
 ) -> dict:
     activity = activity if activity in VALID_ACTIVITIES else "paddling"
     limit = max(1, min(limit, len(BEACH_CONFIG)))
@@ -1179,7 +1180,12 @@ def rank_beaches_data(
             if dist <= active_radius:
                 candidates.append((candidate_id, config, data, dist))
 
-    candidates.sort(key=lambda item: _rank_sort_key(item[2], activity, when=when))
+    if sort_by == "distance" and use_nearby:
+        # "Show me every dog-friendly/free-parking beach near me, closest first"
+        # is a distance question, not a condition-ranking one.
+        candidates.sort(key=lambda item: item[3] if item[3] is not None else float("inf"))
+    else:
+        candidates.sort(key=lambda item: _rank_sort_key(item[2], activity, when=when))
     results = []
     for idx, (candidate_id, config, data, dist) in enumerate(candidates[:limit], start=1):
         outlook = _outlook_for_when(data, when)
@@ -2129,6 +2135,7 @@ async def rank_beaches_api(
     radius_miles: Optional[float] = None,
     dog_friendly: bool = False,
     free_parking: bool = False,
+    sort: str = "condition",
 ):
     if when not in ("today", "tomorrow"):
         raise HTTPException(status_code=400, detail="when must be 'today' or 'tomorrow'")
@@ -2136,6 +2143,8 @@ async def rank_beaches_api(
         raise HTTPException(status_code=400, detail=f"activity must be one of: {', '.join(sorted(VALID_ACTIVITIES))}")
     if coast not in ("all", "gulf", "atlantic"):
         raise HTTPException(status_code=400, detail="coast must be 'all', 'gulf', or 'atlantic'")
+    if sort not in ("condition", "distance"):
+        raise HTTPException(status_code=400, detail="sort must be 'condition' or 'distance'")
     if beach_id and beach_id not in BEACH_CONFIG:
         raise HTTPException(status_code=400, detail=f"Unknown beach_id: {beach_id}")
     if (near_lat is None) ^ (near_lon is None):
@@ -2156,6 +2165,7 @@ async def rank_beaches_api(
         coast=coast,
         dog_friendly=dog_friendly,
         free_parking=free_parking,
+        sort_by=sort,
     )
 
 @app.get("/health")

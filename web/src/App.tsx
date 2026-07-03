@@ -365,9 +365,10 @@ function App() {
       activity: rankActivity,
       when: planningHorizon,
       beach_id: selectedBeach,
-      radius_miles: String(RANK_RADIUS_MILES),
       // "Which nearby beaches have X?" is a browse-by-distance question, not
-      // a best-conditions-first one — show the full nearby set, closest first.
+      // a best-conditions-first one — show every match statewide, closest
+      // first, rather than staying pinned to the "best nearby today" radius.
+      radius_miles: filtering ? '1000' : String(RANK_RADIUS_MILES),
       limit: filtering ? '25' : '5',
       sort: filtering ? 'distance' : 'condition',
     });

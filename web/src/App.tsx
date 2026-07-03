@@ -51,6 +51,7 @@ interface RankResponse {
 }
 
 const RANK_RADIUS_MILES = 50;
+const AMENITY_FILTER_RADIUS_MILES = 100; // ~2hr drive, day-trip range
 const HOME_BEACH_KEY = 'marineagent-home-beach';
 const ONBOARDED_KEY = 'marineagent-onboarded';
 const RANK_ACTIVITY_LABELS: Record<RankActivity, string> = {
@@ -366,9 +367,9 @@ function App() {
       when: planningHorizon,
       beach_id: selectedBeach,
       // "Which nearby beaches have X?" is a browse-by-distance question, not
-      // a best-conditions-first one — show every match statewide, closest
-      // first, rather than staying pinned to the "best nearby today" radius.
-      radius_miles: filtering ? '1000' : String(RANK_RADIUS_MILES),
+      // a best-conditions-first one — widen to day-trip range (~2hr drive)
+      // instead of staying pinned to the "best nearby today" radius.
+      radius_miles: filtering ? String(AMENITY_FILTER_RADIUS_MILES) : String(RANK_RADIUS_MILES),
       limit: filtering ? '25' : '5',
       sort: filtering ? 'distance' : 'condition',
     });
